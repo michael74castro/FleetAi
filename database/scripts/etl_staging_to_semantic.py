@@ -414,7 +414,7 @@ def populate_metadata_catalog(conn):
         ('dim_date', 'Calendar Dates', 'Date dimension for time-based analysis', 'Reference', 'One row per calendar date', 'Date lookups, time-based filtering'),
         ('ref_vehicle_status', 'Vehicle Statuses', 'Reference table for vehicle status codes and descriptions', 'Reference', 'One row per status code', 'What are the vehicle statuses? Status code meanings?'),
         ('ref_order_status', 'Order Statuses', 'Reference table for order status codes and descriptions', 'Reference', 'One row per status code', 'What are the order statuses? Order phases?'),
-        ('fact_odometer_reading', 'Odometer Readings', 'Historical odometer/mileage readings for vehicles', 'Operations', 'One row per odometer reading event', 'Vehicle mileage history? How many km has vehicle X driven?'),
+        ('fact_odometer_reading', 'Odometer & Service Records', 'Historical odometer readings AND maintenance/service records for vehicles. Filter source_type = Service for maintenance records. transaction_description contains repair/service details.', 'Operations', 'One row per reading or service event', 'Vehicle mileage history? Maintenance history for vehicle X? What services were done? Service records for customer Y?'),
         ('fact_billing', 'Billing Records', 'Billing transactions and amounts for vehicles', 'Financial', 'One row per billing record', 'How much was billed? Billing by customer?'),
         ('view_fleet_overview', 'Fleet Overview', 'Comprehensive view of all vehicles with customer and driver information', 'Fleet', 'One row per vehicle', 'Show me the fleet. List all vehicles with details.'),
         ('view_customer_fleet_summary', 'Customer Fleet Summary', 'Summary of fleet size and value by customer', 'Customer', 'One row per customer', 'Fleet size by customer? How many vehicles does each customer have?'),
@@ -455,6 +455,12 @@ def populate_metadata_catalog(conn):
         ('dim_contract', 'contract_duration_months', 'Contract Duration', 'Length of contract in months', 'INTEGER', '48', None, 1, 0, 0),
         ('dim_contract', 'annual_km_allowance', 'Annual KM Allowance', 'Kilometers allowed per year before excess charges', 'INTEGER', '25000', None, 1, 0, 0),
         ('dim_contract', 'excess_km_rate', 'Excess KM Rate', 'Charge per kilometer over the allowance', 'REAL', '0.66', None, 1, 0, 0),
+
+        # Odometer / Service Records
+        ('fact_odometer_reading', 'transaction_description', 'Service Description', 'Repair or service description from maintenance records (e.g. 10000km service, brake repair, tire replacement)', 'TEXT', '10000km service done, 20000km Service done', 'Contains maintenance details from CCGD repair records', 0, 1, 0),
+        ('fact_odometer_reading', 'source_type', 'Record Source', "Type of record: 'Manual Entry', 'Fuel Transaction', or 'Service'. Filter source_type = 'Service' for maintenance records", 'TEXT', 'Manual Entry, Fuel Transaction, Service', "Use source_type = 'Service' to get maintenance records only", 0, 1, 0),
+        ('fact_odometer_reading', 'transaction_amount', 'Service Cost', 'Cost amount of the maintenance or service event', 'REAL', '525.00, 100.00', None, 1, 0, 0),
+        ('fact_odometer_reading', 'supplier_id', 'Supplier ID', 'Identifier of the service supplier/vendor who performed maintenance', 'INTEGER', None, None, 0, 1, 0),
     ]
 
     cursor.executemany("""
@@ -496,6 +502,8 @@ def populate_metadata_catalog(conn):
         ('Order Status', 'Current stage of a vehicle order from creation to delivery', 'order phase, delivery phase', 'ref_order_status', 'Code 0-2=Order Phase, 3-7=Delivery Phase, 9=Cancelled'),
         ('Order Phase', 'Initial stages of order: Created, Sent to Dealer, Delivery Confirmed', 'ordering, procurement', 'ref_order_status', 'status_code IN (0, 1, 2)'),
         ('Delivery Phase', 'Final stages: Insurance, Registration, Driver Pack, Delivered, Lease Schedule', 'fulfillment, delivery', 'ref_order_status', 'status_code IN (3, 4, 5, 6, 7)'),
+        ('Maintenance Record', 'A service or repair event recorded for a vehicle, including description, cost, and mileage at time of service', 'service record, repair, service history, maintenance history', 'fact_odometer_reading', "source_type = 'Service' in fact_odometer_reading"),
+        ('Service Description', 'Free-text description of maintenance work performed on a vehicle, such as km-based services, part replacements, or inspections', 'repair description, service details, work done', 'fact_odometer_reading', "fact_odometer_reading.transaction_description contains the text"),
     ]
 
     cursor.executemany("""

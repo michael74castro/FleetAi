@@ -561,7 +561,16 @@ Contract Rules:
 Date Handling (SQLite):
   Dates stored as TEXT in YYYY-MM-DD format
   Use date('now'), date('now', '-12 months'), etc.
-  Compare with >= / <= operators on TEXT columns""")
+  Compare with >= / <= operators on TEXT columns
+
+Maintenance / Service Records (fact_odometer_reading):
+  source_type = 'Service' filters to maintenance/service records only
+  source_type = 'Manual Entry' for manual odometer readings
+  source_type = 'Fuel Transaction' for fuel-related readings
+  transaction_description contains free-text repair/service details (e.g. '10000km service done')
+  transaction_amount holds the cost of the service
+  Use LIKE '%keyword%' on transaction_description to search for specific services
+  JOIN to dim_vehicle via vehicle_id for vehicle/customer context""")
 
         # --- Pre-built views ---
         lines.append("\n=== PRE-BUILT VIEWS (prefer these over complex JOINs) ===")
@@ -611,7 +620,7 @@ Date Handling (SQLite):
 - dim_date (Calendar Dates): Date dimension for time analysis  [grain: One row per date]
 - ref_vehicle_status (Vehicle Statuses): Status code reference  [grain: One row per status code]
 - ref_order_status (Order Statuses): Order status reference  [grain: One row per status code]
-- fact_odometer_reading (Odometer Readings): Historical mileage readings  [grain: One row per reading]
+- fact_odometer_reading (Odometer & Service Records): Mileage readings AND maintenance/service records. source_type = 'Service' for maintenance. transaction_description has repair details.  [grain: One row per reading/service event]
 - fact_billing (Billing Records): Billing transactions  [grain: One row per billing record]
 
 === KEY RELATIONSHIPS ===
@@ -636,6 +645,7 @@ Lease Types: O = Operational, F = Financial, L = Lease
 Primary driver: driver_sequence = 1 or is_primary_driver = 1
 Active contract: is_active = 1 or contract_status = 'Active'
 Dates: TEXT YYYY-MM-DD, use date('now'), date('now', '-12 months')
+Maintenance: fact_odometer_reading with source_type = 'Service'. transaction_description has details. Use LIKE for search.
 
 === PRE-BUILT VIEWS (prefer over complex JOINs) ===
 - view_fleet_overview: Vehicles with customer and primary driver info
