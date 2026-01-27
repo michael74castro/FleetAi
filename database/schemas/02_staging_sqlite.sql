@@ -118,7 +118,15 @@ CREATE TABLE IF NOT EXISTS staging_vehicles (
     distance_unit TEXT,
     consumption_unit TEXT,
     currency TEXT,
-    object_status INTEGER,  -- Source: CCOB_OBOBSC_Object_Status (1=Active, >1=Terminated)
+    object_status INTEGER,  -- Source: CCOB_OBOBSC_Object_Status
+                            -- 0 = Created
+                            -- 1 = Active
+                            -- 2 = Terminated - Invoicing Stopped
+                            -- 3 = Terminated - Invoice adjustment is made
+                            -- 4 = Terminated - Mileage variation adjustment is made
+                            -- 5 = Terminated - De-investment is made (3 & 4 done)
+                            -- 8 = Terminated - Ready for final settlement run
+                            -- 9 = Terminated - Final settlement report is made
     status TEXT DEFAULT 'Active',
 
     source_hash TEXT,
@@ -210,7 +218,16 @@ CREATE TABLE IF NOT EXISTS staging_orders (
     requested_delivery_date TEXT,
     confirmed_delivery_date TEXT,
     actual_delivery_date TEXT,
-    order_status_code INTEGER,
+    order_status_code INTEGER,  -- Source: CCOR_ORORSC_Order_Status_Code
+                                -- 0 = Order Phase - Created into the system
+                                -- 1 = Order Phase - Sent to dealer
+                                -- 2 = Order Phase - Delivery confirmed by dealer
+                                -- 3 = Delivery Phase - Arranged for insurance
+                                -- 4 = Delivery Phase - Arranged for registration & modifications
+                                -- 5 = Delivery Phase - Prepared driver information pack
+                                -- 6 = Delivery Phase - Vehicle delivered to client
+                                -- 7 = Delivery Phase - Generate lease schedule for invoicing
+                                -- 9 = Order cancelled
     order_status TEXT,
     supplier_no INTEGER,
     supplier_amount REAL,

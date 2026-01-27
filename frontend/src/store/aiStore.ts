@@ -16,9 +16,9 @@ interface AIState {
 
   // Actions
   loadConversations: () => Promise<void>;
-  loadConversation: (id: number) => Promise<void>;
+  loadConversation: (id: string | number) => Promise<void>;
   startNewConversation: () => void;
-  deleteConversation: (id: number) => Promise<void>;
+  deleteConversation: (id: string | number) => Promise<void>;
 
   // Chat
   sendMessage: (message: string) => Promise<ChatResponse>;
@@ -114,25 +114,27 @@ export const useAIStore = create<AIState>((set, get) => ({
     }));
 
     try {
+      const convId = currentConversation?.conversation_id;
       const response = await api.sendChatMessage(
         message,
-        currentConversation?.conversation_id || undefined
+        convId && convId !== 0 && convId !== '0' ? convId : undefined
       );
 
-      // Add assistant message
+      // Add assistant message - response.message is a MessageResponse object
+      const msg = response.message;
       const assistantMessage: Message = {
-        message_id: response.message_id,
+        message_id: typeof msg === 'object' ? msg.message_id : Date.now(),
         role: 'assistant',
-        content: response.message,
-        metadata: response.metadata,
-        created_at: new Date().toISOString(),
+        content: typeof msg === 'object' ? msg.content : String(msg),
+        metadata: typeof msg === 'object' ? msg.metadata : undefined,
+        created_at: typeof msg === 'object' && msg.created_at ? msg.created_at : new Date().toISOString(),
       };
 
       set((state) => ({
         currentConversation: state.currentConversation
           ? {
               ...state.currentConversation,
-              conversation_id: response.conversation_id,
+              conversation_id: response.conversation_id || state.currentConversation.conversation_id,
               messages: [...state.currentConversation.messages, assistantMessage],
             }
           : null,
@@ -142,7 +144,7 @@ export const useAIStore = create<AIState>((set, get) => ({
       }));
 
       // Update conversations list if new
-      if (!currentConversation || currentConversation.conversation_id === 0) {
+      if (!currentConversation || !currentConversation.conversation_id || currentConversation.conversation_id === 0) {
         get().loadConversations();
       }
 

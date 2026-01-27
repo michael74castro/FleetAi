@@ -1,5 +1,5 @@
 import { useMsal } from '@azure/msal-react';
-import { User, LogOut, Settings, ChevronDown, Truck } from 'lucide-react';
+import { User, LogOut, Settings, ChevronDown } from 'lucide-react';
 import { NavLink, Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { getInitials, cn } from '@/lib/utils';
@@ -81,17 +81,12 @@ export default function Header() {
   return (
     <header className="flex h-16 items-center glass border-b border-white/10 px-6" style={{ position: 'relative', zIndex: 100 }}>
       {/* Logo Section */}
-      <NavLink to="/" className="flex items-center space-x-3 group mr-8">
-        <div className="relative">
-          <div className="absolute inset-0 bg-brand-orange rounded-lg blur-lg opacity-50 group-hover:opacity-70 transition-opacity" />
-          <div className="relative flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-brand-orange to-brand-amber">
-            <Truck className="h-5 w-5 text-white" />
-          </div>
-        </div>
-        <div className="flex flex-col">
-          <span className="text-lg font-bold text-white tracking-tight">MyFleet</span>
-          <span className="text-[9px] font-medium text-white/50 uppercase tracking-widest -mt-0.5">Intelligence</span>
-        </div>
+      <NavLink to="/" className="flex items-center group mr-8">
+        <img
+          src="/logo.png"
+          alt="LeasePlan"
+          className="h-10 w-auto object-contain"
+        />
       </NavLink>
 
       {/* Navigation Tabs */}

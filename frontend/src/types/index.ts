@@ -177,7 +177,7 @@ export interface DatasetColumn {
 
 // AI Types
 export interface Conversation {
-  conversation_id: number;
+  conversation_id: string | number;
   title?: string;
   created_at: string;
   updated_at: string;
@@ -199,14 +199,27 @@ export interface MessageMetadata {
   error?: string;
 }
 
+export interface ChartConfig {
+  chart_type: 'bar' | 'line' | 'area' | 'pie' | 'donut';
+  x_axis_key?: string;
+  y_axis_keys?: string[];
+  title?: string;
+}
+
 export interface ChatResponse {
-  message: string;
-  conversation_id: number;
-  message_id: number;
+  conversation_id: string;
+  message: {
+    message_id: number;
+    conversation_id: string;
+    role: string;
+    content: string;
+    metadata?: MessageMetadata;
+    created_at: string;
+  };
   data?: Record<string, unknown>[];
+  chart_config?: ChartConfig;
   suggestions?: string[];
-  sources?: string[];
-  metadata?: Record<string, unknown>;
+  sources?: Record<string, unknown>[];
 }
 
 export interface SQLGenerationResult {

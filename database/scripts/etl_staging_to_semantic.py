@@ -118,7 +118,8 @@ def load_dim_vehicle(conn):
             contract_position_number, lease_type, lease_type_description,
             purchase_price, residual_value, monthly_lease_amount,
             lease_duration_months, annual_km_allowance, current_odometer_km,
-            vehicle_status, is_active
+            lease_start_date, lease_end_date,
+            vehicle_status_code, vehicle_status, is_active
         )
         SELECT
             v.object_no,
@@ -144,12 +145,21 @@ def load_dim_vehicle(conn):
             v.lease_duration_months,
             v.km_allowance,
             v.current_km,
-            CASE
-                WHEN v.object_status = 1 THEN 'Active'
-                WHEN v.object_status > 1 THEN 'Terminated'
+            v.lease_start_date,
+            v.lease_end_date,
+            v.object_status,
+            CASE v.object_status
+                WHEN 0 THEN 'Created'
+                WHEN 1 THEN 'Active'
+                WHEN 2 THEN 'Terminated - Invoicing Stopped'
+                WHEN 3 THEN 'Terminated - Invoice Adjustment Made'
+                WHEN 4 THEN 'Terminated - Mileage Adjustment Made'
+                WHEN 5 THEN 'Terminated - De-investment Made'
+                WHEN 8 THEN 'Terminated - Ready for Settlement'
+                WHEN 9 THEN 'Terminated - Final Settlement Made'
                 ELSE 'Unknown'
             END,
-            CASE WHEN v.object_status = 1 THEN 1 ELSE 0 END
+            CASE WHEN v.object_status IN (0, 1) THEN 1 ELSE 0 END
         FROM staging_vehicles v
         LEFT JOIN staging_customers c ON v.customer_no = c.customer_id
     """)
@@ -402,6 +412,8 @@ def populate_metadata_catalog(conn):
         ('dim_group', 'Customer Groups', 'Logical groupings of customers for reporting', 'Customer', 'One row per group', 'What groups exist? Which customers are in group X?'),
         ('dim_make_model', 'Vehicle Makes and Models', 'Reference data for vehicle manufacturers and models', 'Reference', 'One row per make-model combination', 'What brands do we have? What models are available?'),
         ('dim_date', 'Calendar Dates', 'Date dimension for time-based analysis', 'Reference', 'One row per calendar date', 'Date lookups, time-based filtering'),
+        ('ref_vehicle_status', 'Vehicle Statuses', 'Reference table for vehicle status codes and descriptions', 'Reference', 'One row per status code', 'What are the vehicle statuses? Status code meanings?'),
+        ('ref_order_status', 'Order Statuses', 'Reference table for order status codes and descriptions', 'Reference', 'One row per status code', 'What are the order statuses? Order phases?'),
         ('fact_odometer_reading', 'Odometer Readings', 'Historical odometer/mileage readings for vehicles', 'Operations', 'One row per odometer reading event', 'Vehicle mileage history? How many km has vehicle X driven?'),
         ('fact_billing', 'Billing Records', 'Billing transactions and amounts for vehicles', 'Financial', 'One row per billing record', 'How much was billed? Billing by customer?'),
         ('view_fleet_overview', 'Fleet Overview', 'Comprehensive view of all vehicles with customer and driver information', 'Fleet', 'One row per vehicle', 'Show me the fleet. List all vehicles with details.'),
@@ -434,6 +446,8 @@ def populate_metadata_catalog(conn):
         ('dim_vehicle', 'monthly_lease_amount', 'Monthly Lease', 'Monthly lease payment amount', 'REAL', '5000.00', None, 1, 0, 0),
         ('dim_vehicle', 'current_odometer_km', 'Current Odometer (km)', 'Latest recorded odometer reading in kilometers', 'INTEGER', '107163', None, 1, 0, 0),
         ('dim_vehicle', 'purchase_price', 'Purchase Price', 'Original purchase price of the vehicle', 'REAL', '205000.00', None, 1, 0, 0),
+        ('dim_vehicle', 'vehicle_status_code', 'Status Code', 'Numeric status code (0=Created, 1=Active, 2-9=Terminated stages)', 'INTEGER', '0, 1, 2, 3, 4, 5, 8, 9', None, 0, 1, 0),
+        ('dim_vehicle', 'vehicle_status', 'Vehicle Status', 'Human-readable status description', 'TEXT', 'Active, Terminated - Invoicing Stopped', None, 0, 1, 0),
 
         # Contracts
         ('dim_contract', 'contract_position_number', 'Contract Position', 'Unique identifier for the contract position', 'INTEGER', '1000233', None, 0, 1, 1),
@@ -476,6 +490,12 @@ def populate_metadata_catalog(conn):
         ('Excess KM', 'Kilometers driven beyond the allowance, charged at extra rate', 'overage, extra mileage', 'dim_contract', 'Current odometer - (allowance * years)'),
         ('VIN', 'Vehicle Identification Number - unique 17-character vehicle identifier', 'chassis number', 'dim_vehicle', None),
         ('Account Manager', 'Employee responsible for managing customer relationships', 'relationship manager, AM', 'dim_customer', None),
+        ('Vehicle Status', 'Current lifecycle state of a vehicle (Created, Active, or Terminated stages)', 'status, state, lifecycle', 'dim_vehicle, ref_vehicle_status', 'Code 0=Created, 1=Active, 2-9=Various termination stages'),
+        ('Active Vehicle', 'Vehicle with status code 0 (Created) or 1 (Active)', 'live vehicle, current vehicle', 'dim_vehicle', 'is_active = 1 when status_code IN (0, 1)'),
+        ('Terminated Vehicle', 'Vehicle no longer in active fleet, going through settlement process', 'ended, closed, settled', 'dim_vehicle', 'status_code >= 2'),
+        ('Order Status', 'Current stage of a vehicle order from creation to delivery', 'order phase, delivery phase', 'ref_order_status', 'Code 0-2=Order Phase, 3-7=Delivery Phase, 9=Cancelled'),
+        ('Order Phase', 'Initial stages of order: Created, Sent to Dealer, Delivery Confirmed', 'ordering, procurement', 'ref_order_status', 'status_code IN (0, 1, 2)'),
+        ('Delivery Phase', 'Final stages: Insurance, Registration, Driver Pack, Delivered, Lease Schedule', 'fulfillment, delivery', 'ref_order_status', 'status_code IN (3, 4, 5, 6, 7)'),
     ]
 
     cursor.executemany("""

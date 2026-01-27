@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # API
     API_V1_PREFIX: str = "/api/v1"
-    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "http://localhost:3003", "http://localhost:5173"]
+    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "http://localhost:3003", "http://localhost:5173", "http://127.0.0.1:3000"]
 
     # Azure AD Authentication (optional for local testing)
     AZURE_TENANT_ID: Optional[str] = Field(default=None, description="Azure AD Tenant ID")
@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     AZURE_OPENAI_API_VERSION: str = Field(default="2024-02-15-preview")
     AZURE_OPENAI_DEPLOYMENT_NAME: str = Field(default="gpt-4")
     AZURE_OPENAI_EMBEDDING_DEPLOYMENT: str = Field(default="text-embedding-ada-002")
+
+    # Regular OpenAI (alternative to Azure OpenAI)
+    OPENAI_API_KEY: Optional[str] = Field(default=None, description="OpenAI API Key (from platform.openai.com)")
+    OPENAI_MODEL: str = Field(default="gpt-4o-mini", description="OpenAI model name")
 
     # Session & Security
     SECRET_KEY: str = Field(..., min_length=32, description="Secret key for JWT signing")

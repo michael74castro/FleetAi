@@ -71,11 +71,20 @@ class ChatRequest(BaseModel):
     context: Optional[Dict[str, Any]] = None
 
 
+class ChartConfig(BaseModel):
+    """Chart visualization configuration for AI responses"""
+    chart_type: str = Field(description="One of: bar, line, area, pie, donut")
+    x_axis_key: Optional[str] = Field(None, description="Key for x-axis / category dimension")
+    y_axis_keys: Optional[List[str]] = Field(None, description="Keys for y-axis / value metrics")
+    title: Optional[str] = None
+
+
 class ChatResponse(BaseModel):
     """Response from chat"""
     conversation_id: str
     message: MessageResponse
     data: Optional[Any] = None  # Query results, charts, etc.
+    chart_config: Optional[ChartConfig] = None
     suggestions: Optional[List[str]] = None
     sources: Optional[List[Dict[str, Any]]] = None
 

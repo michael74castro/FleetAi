@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Truck, Loader2, Mail, Lock, ArrowRight } from 'lucide-react';
+import { Loader2, Mail, Lock, ArrowRight } from 'lucide-react';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
 
@@ -75,12 +75,11 @@ export default function LoginPage() {
         {/* Logo section */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center mb-6">
-            <div className="relative">
-              <div className="absolute inset-0 bg-brand-orange rounded-2xl blur-2xl opacity-60 animate-pulse-glow" />
-              <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-orange via-brand-orange to-brand-amber shadow-glow-orange">
-                <Truck className="h-10 w-10 text-white" />
-              </div>
-            </div>
+            <img
+              src="/logo.png"
+              alt="LeasePlan"
+              className="h-16 w-auto object-contain"
+            />
           </div>
           <h1 className="text-4xl font-bold text-white tracking-tight">
             My<span className="text-gradient-orange">Fleet</span>

@@ -18,7 +18,7 @@ from app.core.config import settings
 from app.core.database import init_database, close_database, DatabaseHealthCheck
 
 # Import API routers
-from app.api.v1 import auth, dashboards, reports, datasets, ai_agent, admin
+from app.api.v1 import auth, dashboards, reports, datasets, ai_agent, admin, fleet
 from app.api.deps import get_db
 
 # Configure logging
@@ -152,6 +152,12 @@ app.include_router(
     admin.router,
     prefix=f"{settings.API_V1_PREFIX}/admin",
     tags=["Administration"]
+)
+
+app.include_router(
+    fleet.router,
+    prefix=f"{settings.API_V1_PREFIX}/fleet",
+    tags=["Fleet Operations"]
 )
 
 

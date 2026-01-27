@@ -136,6 +136,7 @@ async def chat(
             created_at=assistant_message.created_at
         ),
         data=response.get("data"),
+        chart_config=response.get("chart_config"),
         suggestions=response.get("suggestions"),
         sources=response.get("sources")
     )

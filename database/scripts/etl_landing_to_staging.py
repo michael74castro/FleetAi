@@ -183,12 +183,13 @@ def load_vehicles(conn):
             INSERT INTO staging_vehicles (
                 object_no, vin, make_code, model_code, customer_no,
                 pc_no, contract_no, contract_position_no, color_code, color_name,
-                body_type_code, registration_no, purchase_price, residual_value,
+                registration_no, purchase_price, residual_value,
                 lease_duration_months, lease_amount, km_allowance, km_budget,
                 current_km, fuel_code, lease_type, license_plate_code,
                 group_no, order_no, sale_price, report_period, country,
                 volume_unit, distance_unit, consumption_unit, currency,
                 object_status,
+                lease_start_date, lease_end_date, last_km_date,
                 source_hash
             )
             SELECT
@@ -202,7 +203,6 @@ def load_vehicles(conn):
                 ob.CCOB_OBCPNO_Calculation_Number,
                 ob.CCOB_OBOBUC_Upholstery_Color,
                 ob.CCOB_OBOBEC_Exterior_Color,
-                ob.CCOB_OBOBBC_Object_Begin_Date_Century,
                 ob.CCOB_OBRGNO_Registration_Number,
                 ob.CCOB_OBPRIC_Monthly_Rental,
                 ob.CCOB_OBFSRV_Budgeted_Residual_Value,
@@ -223,7 +223,31 @@ def load_vehicles(conn):
                 ob.CCOB_OBDISC_Distance_Measurement,
                 ob.CCOB_OBCONC_Consumption_Measurement,
                 ob.CCOB_OBCURC_Currency_Unit,
-                ob.CCOB_OBOBSC_Object_Status,  -- 1=Active, >1=Terminated
+                ob.CCOB_OBOBSC_Object_Status,  -- 0=Created, 1=Active, 2-9=Terminated stages
+                -- lease_start_date from Object Begin Date (century/year/month/day)
+                CASE WHEN ob.CCOB_OBOBBC_Object_Begin_Date_Century > 0
+                     AND ob.CCOB_OBOBBM_Object_Begin_Date_Month BETWEEN 1 AND 12
+                     AND ob.CCOB_OBOBBD_Object_Begin_Date_Day BETWEEN 1 AND 31
+                THEN printf('%04d-%02d-%02d',
+                    ob.CCOB_OBOBBC_Object_Begin_Date_Century * 100 + ob.CCOB_OBOBBY_Object_Begin_Date_Year,
+                    ob.CCOB_OBOBBM_Object_Begin_Date_Month, ob.CCOB_OBOBBD_Object_Begin_Date_Day)
+                ELSE NULL END,
+                -- lease_end_date from Object End Date (century/year/month/day)
+                CASE WHEN ob.CCOB_OBFSEC_Object_End_Date_Century > 0
+                     AND ob.CCOB_OBFSEM_Object_End_Date_Month BETWEEN 1 AND 12
+                     AND ob.CCOB_OBFSED_Object_End_Date_Day BETWEEN 1 AND 31
+                THEN printf('%04d-%02d-%02d',
+                    ob.CCOB_OBFSEC_Object_End_Date_Century * 100 + ob.CCOB_OBFSEY_Object_End_Date_Year,
+                    ob.CCOB_OBFSEM_Object_End_Date_Month, ob.CCOB_OBFSED_Object_End_Date_Day)
+                ELSE NULL END,
+                -- last_km_date from Mileage Date (century/year/month/day)
+                CASE WHEN ob.CCOB_OBKMCC_Mileage_Date_Century > 0
+                     AND ob.CCOB_OBKMMM_Mileage_Date_Month BETWEEN 1 AND 12
+                     AND ob.CCOB_OBKMDD_Mileage_Date_Day BETWEEN 1 AND 31
+                THEN printf('%04d-%02d-%02d',
+                    ob.CCOB_OBKMCC_Mileage_Date_Century * 100 + ob.CCOB_OBKMYY_Mileage_Date_Year,
+                    ob.CCOB_OBKMMM_Mileage_Date_Month, ob.CCOB_OBKMDD_Mileage_Date_Day)
+                ELSE NULL END,
                 NULL
             FROM landing_CCOB ob
         """)
@@ -280,7 +304,7 @@ def load_contracts(conn):
                 monthly_rate_replacement, monthly_rate_road_tax, monthly_rate_tires,
                 monthly_rate_total, unit_rate_maintenance, unit_rate_tires,
                 unit_rate_replacement, excess_km_rate, report_period, country,
-                lease_type, source_hash
+                lease_type, start_date, source_hash
             )
             SELECT
                 CCCP_CPCPNO_Contract_Position_Number,
@@ -316,6 +340,14 @@ def load_contracts(conn):
                 CCCP_CPRPPD_Reporting_Period,
                 CCCP_CPCOUC_Country_Code,
                 CCCP_CPLPCD_Lease_Type_Code,
+                -- start_date from Calculation Date (century/year/month/day)
+                CASE WHEN CCCP_CPCPCC > 0
+                     AND CCCP_CPCPMM BETWEEN 1 AND 12
+                     AND CCCP_CPCPDD BETWEEN 1 AND 31
+                THEN printf('%04d-%02d-%02d',
+                    CCCP_CPCPCC * 100 + CCCP_CPCPYY,
+                    CCCP_CPCPMM, CCCP_CPCPDD)
+                ELSE NULL END,
                 NULL
             FROM landing_CCCP
         """)
@@ -323,6 +355,14 @@ def load_contracts(conn):
         source_rows = cursor.execute("SELECT COUNT(*) FROM landing_CCCP").fetchone()[0]
         conn.commit()
         inserted_rows = cursor.execute("SELECT COUNT(*) FROM staging_contracts").fetchone()[0]
+
+        # Compute end_date from start_date + duration_months
+        cursor.execute("""
+            UPDATE staging_contracts
+            SET end_date = date(start_date, '+' || duration_months || ' months')
+            WHERE start_date IS NOT NULL AND duration_months IS NOT NULL
+        """)
+        conn.commit()
 
         log_etl_end(conn, log_id, source_rows, inserted_rows)
         print(f"{inserted_rows} rows")
@@ -382,6 +422,73 @@ def load_orders(conn):
                 FROM landing_CCOR
                 WHERE landing_CCOR.CCOR_ORORNO_Order_Number = staging_orders.order_no
                 AND CCOR_ORORCC > 0
+            )
+        """)
+        conn.commit()
+
+        # Derive order_status text from order_status_code
+        cursor.execute("""
+            UPDATE staging_orders
+            SET order_status = CASE order_status_code
+                WHEN 0 THEN 'Created'
+                WHEN 1 THEN 'Sent to Dealer'
+                WHEN 2 THEN 'Delivery Confirmed'
+                WHEN 3 THEN 'Insurance Arranged'
+                WHEN 4 THEN 'Registration Arranged'
+                WHEN 5 THEN 'Driver Pack Prepared'
+                WHEN 6 THEN 'Vehicle Delivered'
+                WHEN 7 THEN 'Lease Schedule Generated'
+                WHEN 9 THEN 'Cancelled'
+                ELSE 'Unknown'
+            END
+        """)
+        conn.commit()
+
+        # Populate actual_delivery_date from CCOR_ORDLCC/YY/MM/DD
+        cursor.execute("""
+            UPDATE staging_orders
+            SET actual_delivery_date = (
+                SELECT CASE WHEN CCOR_ORDLCC > 0
+                            AND CCOR_ORDLMM BETWEEN 1 AND 12
+                            AND CCOR_ORDLDD BETWEEN 1 AND 31
+                       THEN printf('%04d-%02d-%02d',
+                           CCOR_ORDLCC * 100 + CCOR_ORDLYY,
+                           CCOR_ORDLMM, CCOR_ORDLDD)
+                       ELSE NULL END
+                FROM landing_CCOR
+                WHERE landing_CCOR.CCOR_ORORNO_Order_Number = staging_orders.order_no
+            )
+        """)
+
+        # Populate requested_delivery_date from CCOR_ORDLQC/QY/QM/QD
+        cursor.execute("""
+            UPDATE staging_orders
+            SET requested_delivery_date = (
+                SELECT CASE WHEN (CCOR_ORDLQC > 0 OR CCOR_ORDLQY > 0)
+                            AND CCOR_ORDLQM BETWEEN 1 AND 12
+                            AND CCOR_ORDLQD BETWEEN 1 AND 31
+                       THEN printf('%04d-%02d-%02d',
+                           CASE WHEN CCOR_ORDLQC > 0 THEN CCOR_ORDLQC ELSE 20 END * 100 + CCOR_ORDLQY,
+                           CCOR_ORDLQM, CCOR_ORDLQD)
+                       ELSE NULL END
+                FROM landing_CCOR
+                WHERE landing_CCOR.CCOR_ORORNO_Order_Number = staging_orders.order_no
+            )
+        """)
+
+        # Populate confirmed_delivery_date from CCOR_OROKCC/YY/MM/DD
+        cursor.execute("""
+            UPDATE staging_orders
+            SET confirmed_delivery_date = (
+                SELECT CASE WHEN (CCOR_OROKCC > 0 OR CCOR_OROKYY > 0)
+                            AND CCOR_OROKMM BETWEEN 1 AND 12
+                            AND CCOR_OROKDD BETWEEN 1 AND 31
+                       THEN printf('%04d-%02d-%02d',
+                           CASE WHEN CCOR_OROKCC > 0 THEN CCOR_OROKCC ELSE 20 END * 100 + CCOR_OROKYY,
+                           CCOR_OROKMM, CCOR_OROKDD)
+                       ELSE NULL END
+                FROM landing_CCOR
+                WHERE landing_CCOR.CCOR_ORORNO_Order_Number = staging_orders.order_no
             )
         """)
         conn.commit()

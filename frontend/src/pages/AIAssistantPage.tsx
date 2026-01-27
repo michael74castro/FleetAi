@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Send, Plus, Trash2, MessageSquare, Sparkles, Code, Lightbulb, Bot, User } from 'lucide-react';
 import { useAIStore } from '@/store/aiStore';
+import AIResponseChart from '@/components/ai/AIResponseChart';
+import { detectChartConfig } from '@/utils/chartDetection';
 
 export default function AIAssistantPage() {
   const { conversationId } = useParams();
@@ -26,7 +28,7 @@ export default function AIAssistantPage() {
   useEffect(() => {
     loadConversations();
     if (conversationId) {
-      loadConversation(parseInt(conversationId));
+      loadConversation(conversationId);
     } else {
       startNewConversation();
     }
@@ -69,11 +71,11 @@ export default function AIAssistantPage() {
     navigate('/assistant');
   };
 
-  const handleDeleteConversation = async (id: number, e: React.MouseEvent) => {
+  const handleDeleteConversation = async (id: string | number, e: React.MouseEvent) => {
     e.stopPropagation();
     if (confirm('Are you sure you want to delete this conversation?')) {
       await deleteConversation(id);
-      if (parseInt(conversationId || '0') === id) {
+      if (conversationId === String(id)) {
         navigate('/assistant');
       }
     }
@@ -99,14 +101,14 @@ export default function AIAssistantPage() {
               key={conv.conversation_id}
               onClick={() => navigate(`/assistant/${conv.conversation_id}`)}
               className={`group flex items-center justify-between rounded-xl px-3 py-3 cursor-pointer transition-all duration-200 ${
-                parseInt(conversationId || '0') === conv.conversation_id
+                conversationId === String(conv.conversation_id)
                   ? 'glass-light border-brand-orange/30'
                   : 'hover:bg-white/5'
               }`}
             >
               <div className="flex items-center space-x-3 overflow-hidden">
                 <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-                  parseInt(conversationId || '0') === conv.conversation_id
+                  conversationId === String(conv.conversation_id)
                     ? 'bg-brand-orange/20 text-brand-orange'
                     : 'bg-white/10 text-white/50'
                 }`}>
@@ -191,8 +193,10 @@ export default function AIAssistantPage() {
                           : 'glass border-brand-cyan/20'
                       }`}
                     >
-                      <p className="text-sm whitespace-pre-wrap text-white/90">{message.content}</p>
-                      {message.metadata?.sql && (
+                      <p className="text-sm whitespace-pre-wrap text-white/90">
+                        {typeof message.content === 'string' ? message.content : JSON.stringify(message.content)}
+                      </p>
+                      {message.metadata && typeof message.metadata === 'object' && message.metadata.sql && (
                         <pre className="mt-3 p-3 bg-black/30 rounded-xl text-xs overflow-x-auto border border-white/10">
                           <code className="text-brand-cyan">{message.metadata.sql}</code>
                         </pre>
@@ -238,6 +242,16 @@ export default function AIAssistantPage() {
             ))}
           </div>
         )}
+
+        {/* Chart visualization if available */}
+        {lastResponse?.data && lastResponse.data.length > 0 && (() => {
+          const chartConfig = lastResponse.chart_config ?? detectChartConfig(lastResponse.data);
+          return chartConfig ? (
+            <div className="px-6 py-3 border-t border-white/10">
+              <AIResponseChart data={lastResponse.data} chartConfig={chartConfig} />
+            </div>
+          ) : null;
+        })()}
 
         {/* Data table if available */}
         {lastResponse?.data && lastResponse.data.length > 0 && (

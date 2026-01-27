@@ -98,7 +98,14 @@ export default function OperationPage() {
     'make_and_model',
     'customer_name',
     'vehicle_status',
-    'current_odometer_km'
+    'current_odometer_km',
+    'vehicle_year',
+    'color_name',
+    'fuel_type',
+    'monthly_lease_amount',
+    'vin_number',
+    'driver_email',
+    'driver_phone'
   ]);
 
   // Sort
@@ -129,21 +136,16 @@ export default function OperationPage() {
         const data = await api.getOperationsKPIs();
         setKpis(data);
       } catch (error) {
-        // Use fallback data
-        setKpis({
-          active_within_12_months: 9557,
-          active_vehicles: 7121,
-          started_last_12_months: 2375,
-          terminated_last_12_months: 2436,
-          last_data_update: '2026-01-23T04:33:32Z',
-          last_monthly_closure: 'December 2025'
-        });
+        console.error('Failed to fetch KPIs:', error);
       } finally {
         setLoading(false);
       }
     };
     fetchKPIs();
   }, []);
+
+  // Active status filter
+  const [activeStatusFilter, setActiveStatusFilter] = useState('Active');
 
   // Fetch vehicles
   useEffect(() => {
@@ -156,6 +158,7 @@ export default function OperationPage() {
           driver: driverSearch || undefined,
           license_plate: licensePlateSearch || undefined,
           make: makeFilter || undefined,
+          status: activeStatusFilter || undefined,
           sort_by: sortBy,
           sort_order: sortOrder
         });
@@ -163,45 +166,20 @@ export default function OperationPage() {
         setTotalItems(data.total || 0);
         setTotalPages(data.total_pages || 0);
       } catch (error) {
-        // Use fallback mock data
-        const mockVehicles: Vehicle[] = Array.from({ length: pageSize }, (_, i) => ({
-          vehicle_id: i + 1 + (page - 1) * pageSize,
-          registration_number: `UAE-${String(10000 + i + (page - 1) * pageSize).padStart(5, '0')}`,
-          vin_number: `VIN${String(i + 1).padStart(10, '0')}`,
-          make_name: ['Toyota', 'Nissan', 'Mitsubishi', 'Honda', 'Ford'][i % 5],
-          model_name: ['Camry', 'Patrol', 'Pajero', 'Accord', 'Explorer'][i % 5],
-          make_and_model: [
-            'Toyota Camry',
-            'Nissan Patrol',
-            'Mitsubishi Pajero',
-            'Honda Accord',
-            'Ford Explorer'
-          ][i % 5],
-          vehicle_year: 2020 + (i % 5),
-          color_name: ['White', 'Black', 'Silver', 'Blue', 'Red'][i % 5],
-          fuel_type: ['Petrol', 'Diesel', 'Hybrid'][i % 3],
-          customer_name: `Customer ${((i % 10) + 1)}`,
-          driver_name: `Driver ${i + 1 + (page - 1) * pageSize}`,
-          driver_email: `driver${i + 1}@example.com`,
-          driver_phone: `+971 50 ${String(1000000 + i).slice(-7)}`,
-          vehicle_status: i % 4 === 0 ? 'Terminated' : 'Active',
-          current_odometer_km: 50000 + Math.floor(Math.random() * 100000),
-          monthly_lease_amount: 2000 + Math.floor(Math.random() * 3000)
-        }));
-        setVehicles(mockVehicles);
-        setTotalItems(7121);
-        setTotalPages(Math.ceil(7121 / pageSize));
+        console.error('Failed to fetch vehicles:', error);
+        setVehicles([]);
+        setTotalItems(0);
+        setTotalPages(0);
       } finally {
         setTableLoading(false);
       }
     };
     fetchVehicles();
-  }, [page, pageSize, sortBy, sortOrder]);
+  }, [page, pageSize, sortBy, sortOrder, activeStatusFilter, driverSearch, licensePlateSearch, makeFilter]);
 
   // Handle search
   const handleSearch = () => {
     setPage(1);
-    // Trigger refetch with current filters
   };
 
   // Handle reset filters
@@ -321,7 +299,10 @@ export default function OperationPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Active within last 12 months */}
-        <div className="glass-panel p-6 hover:border-brand-orange/30 transition-colors cursor-pointer group">
+        <div
+          onClick={() => { setActiveStatusFilter('active_within_12m'); setPage(1); }}
+          className={`glass-panel p-6 hover:border-brand-orange/30 transition-colors cursor-pointer group ${activeStatusFilter === 'active_within_12m' ? 'border-brand-orange/50' : ''}`}
+        >
           <div className="flex flex-col items-center text-center">
             <span className="text-4xl font-bold text-white group-hover:text-brand-orange transition-colors">
               {loading ? '...' : formatNumber(kpis?.active_within_12_months || 0)}
@@ -332,7 +313,10 @@ export default function OperationPage() {
         </div>
 
         {/* Active vehicles */}
-        <div className="glass-panel p-6 hover:border-brand-cyan/30 transition-colors cursor-pointer group">
+        <div
+          onClick={() => { setActiveStatusFilter('Active'); setPage(1); }}
+          className={`glass-panel p-6 hover:border-brand-cyan/30 transition-colors cursor-pointer group ${activeStatusFilter === 'Active' ? 'border-brand-cyan/50' : ''}`}
+        >
           <div className="flex flex-col items-center text-center">
             <span className="text-4xl font-bold text-white group-hover:text-brand-cyan transition-colors">
               {loading ? '...' : formatNumber(kpis?.active_vehicles || 0)}
@@ -343,7 +327,10 @@ export default function OperationPage() {
         </div>
 
         {/* Started in last 12 months */}
-        <div className="glass-panel p-6 hover:border-brand-green/30 transition-colors cursor-pointer group">
+        <div
+          onClick={() => { setActiveStatusFilter('started_12m'); setPage(1); }}
+          className={`glass-panel p-6 hover:border-brand-green/30 transition-colors cursor-pointer group ${activeStatusFilter === 'started_12m' ? 'border-brand-green/50' : ''}`}
+        >
           <div className="flex flex-col items-center text-center">
             <span className="text-4xl font-bold text-white group-hover:text-brand-green transition-colors">
               {loading ? '...' : formatNumber(kpis?.started_last_12_months || 0)}
@@ -354,7 +341,10 @@ export default function OperationPage() {
         </div>
 
         {/* Terminated in last 12 months */}
-        <div className="glass-panel p-6 hover:border-brand-amber/30 transition-colors cursor-pointer group">
+        <div
+          onClick={() => { setActiveStatusFilter('terminated_12m'); setPage(1); }}
+          className={`glass-panel p-6 hover:border-brand-amber/30 transition-colors cursor-pointer group ${activeStatusFilter === 'terminated_12m' ? 'border-brand-amber/50' : ''}`}
+        >
           <div className="flex flex-col items-center text-center">
             <span className="text-4xl font-bold text-white group-hover:text-brand-amber transition-colors">
               {loading ? '...' : formatNumber(kpis?.terminated_last_12_months || 0)}

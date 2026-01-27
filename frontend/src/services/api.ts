@@ -304,7 +304,7 @@ class ApiService {
   }
 
   // AI Agent
-  async sendChatMessage(message: string, conversationId?: number) {
+  async sendChatMessage(message: string, conversationId?: string | number) {
     const response = await this.client.post('/ai/chat', {
       message,
       conversation_id: conversationId,
@@ -317,12 +317,12 @@ class ApiService {
     return response.data;
   }
 
-  async getConversation(id: number) {
+  async getConversation(id: string | number) {
     const response = await this.client.get(`/ai/conversations/${id}`);
     return response.data;
   }
 
-  async deleteConversation(id: number) {
+  async deleteConversation(id: string | number) {
     await this.client.delete(`/ai/conversations/${id}`);
   }
 

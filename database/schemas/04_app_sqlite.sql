@@ -7,6 +7,49 @@
 -- USER & AUTHENTICATION
 -- =============================================
 
+-- Vehicle Status Reference Table
+CREATE TABLE IF NOT EXISTS app_vehicle_status (
+    status_code INTEGER PRIMARY KEY,
+    status_name TEXT NOT NULL,
+    status_description TEXT NOT NULL,
+    status_category TEXT NOT NULL,  -- 'Active', 'Created', 'Terminated'
+    is_active_status INTEGER DEFAULT 0,
+    display_order INTEGER
+);
+
+-- Insert vehicle status definitions
+INSERT OR REPLACE INTO app_vehicle_status (status_code, status_name, status_description, status_category, is_active_status, display_order) VALUES
+(0, 'Created', 'Vehicle record created but not yet active', 'Created', 1, 1),
+(1, 'Active', 'Vehicle is currently active in the fleet', 'Active', 1, 2),
+(2, 'Terminated - Invoicing Stopped', 'Contract terminated, invoicing has stopped', 'Terminated', 0, 3),
+(3, 'Terminated - Invoice Adjustment Made', 'Contract terminated, invoice adjustment completed', 'Terminated', 0, 4),
+(4, 'Terminated - Mileage Adjustment Made', 'Contract terminated, mileage variation adjustment completed', 'Terminated', 0, 5),
+(5, 'Terminated - De-investment Made', 'Contract terminated, de-investment completed (steps 3 & 4 done)', 'Terminated', 0, 6),
+(8, 'Terminated - Ready for Settlement', 'Contract terminated, ready for first final settlement run', 'Terminated', 0, 7),
+(9, 'Terminated - Final Settlement Made', 'Contract terminated, final settlement report completed', 'Terminated', 0, 8);
+
+-- Order Status Reference Table
+CREATE TABLE IF NOT EXISTS app_order_status (
+    status_code INTEGER PRIMARY KEY,
+    status_name TEXT NOT NULL,
+    status_description TEXT NOT NULL,
+    status_phase TEXT NOT NULL,  -- 'Order Phase', 'Delivery Phase', 'Cancelled'
+    is_active_order INTEGER DEFAULT 1,
+    display_order INTEGER
+);
+
+-- Insert order status definitions
+INSERT OR REPLACE INTO app_order_status (status_code, status_name, status_description, status_phase, is_active_order, display_order) VALUES
+(0, 'Created', 'Order created into the system', 'Order Phase', 1, 1),
+(1, 'Sent to Dealer', 'Order sent to dealer', 'Order Phase', 1, 2),
+(2, 'Delivery Confirmed', 'Delivery confirmed by dealer', 'Order Phase', 1, 3),
+(3, 'Insurance Arranged', 'Arranged for insurance', 'Delivery Phase', 1, 4),
+(4, 'Registration Arranged', 'Arranged for vehicle registration and other modifications', 'Delivery Phase', 1, 5),
+(5, 'Driver Pack Prepared', 'Prepared driver information pack', 'Delivery Phase', 1, 6),
+(6, 'Vehicle Delivered', 'Vehicle delivered to client', 'Delivery Phase', 1, 7),
+(7, 'Lease Schedule Generated', 'Generate lease schedule in the system for invoicing', 'Delivery Phase', 0, 8),
+(9, 'Cancelled', 'Order cancelled', 'Cancelled', 0, 9);
+
 -- Roles lookup table
 CREATE TABLE IF NOT EXISTS app_roles (
     role_id INTEGER PRIMARY KEY AUTOINCREMENT,
