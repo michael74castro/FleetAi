@@ -132,6 +132,27 @@ INSERT OR REPLACE INTO ref_order_status (status_code, status_name, status_descri
 (7, 'Lease Schedule Generated', 'Generate lease schedule in the system for invoicing', 'Delivery Phase', 0, 8),
 (9, 'Cancelled', 'Order cancelled', 'Cancelled', 0, 9);
 
+-- Fuel Code Reference Table
+CREATE TABLE IF NOT EXISTS ref_fuel_code (
+    fuel_code INTEGER PRIMARY KEY,
+    fuel_type TEXT NOT NULL,         -- 'Petrol', 'Diesel', 'LPG', 'Electric'
+    fuel_subtype TEXT NOT NULL,      -- Detailed variant name
+    fuel_category TEXT NOT NULL,     -- 'ICE', 'Alternative', 'Electric'
+    is_electric INTEGER DEFAULT 0,
+    display_order INTEGER
+);
+
+-- Insert fuel code definitions
+INSERT OR REPLACE INTO ref_fuel_code (fuel_code, fuel_type, fuel_subtype, fuel_category, is_electric, display_order) VALUES
+(1, 'Petrol', 'Unleaded 91 E-Plus', 'ICE', 0, 1),
+(2, 'Petrol', 'Unleaded 95 Special', 'ICE', 0, 2),
+(3, 'Diesel', 'Diesel', 'ICE', 0, 3),
+(4, 'LPG', 'LPG', 'Alternative', 0, 4),
+(6, 'Petrol', 'Unleaded 98 Super', 'ICE', 0, 5),
+(7, 'Electric', 'Full Electric Vehicle (BEV)', 'Electric', 1, 6),
+(8, 'Electric', 'Plugin Hybrid Electric Vehicle (PHEV)', 'Electric', 1, 7),
+(9, 'Electric', 'Hybrid Electric Vehicle (HEV)', 'Electric', 1, 8);
+
 -- Customer Dimension (denormalized, AI-friendly)
 CREATE TABLE IF NOT EXISTS dim_customer (
     customer_key INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -168,7 +189,9 @@ CREATE TABLE IF NOT EXISTS dim_vehicle (
     vehicle_year INTEGER,
     color_name TEXT,
     body_type TEXT,
-    fuel_type TEXT,
+    fuel_code INTEGER,              -- FK to ref_fuel_code.fuel_code
+    fuel_type TEXT,                  -- e.g. 'Petrol', 'Diesel', 'Electric'
+    is_electric INTEGER DEFAULT 0,  -- 1 if fuel_code IN (7,8,9)
     customer_id INTEGER,
     customer_name TEXT,
     contract_position_number INTEGER,
@@ -183,6 +206,10 @@ CREATE TABLE IF NOT EXISTS dim_vehicle (
     last_odometer_date TEXT,
     lease_start_date TEXT,
     lease_end_date TEXT,
+    expected_end_date TEXT,        -- date(lease_start_date, '+' || lease_duration_months || ' months')
+    months_driven INTEGER,         -- months between lease_start_date and today
+    months_remaining INTEGER,      -- months between today and expected_end_date
+    days_to_contract_end INTEGER,  -- days between today and expected_end_date (negative = overdue)
     vehicle_status_code INTEGER,  -- FK to ref_vehicle_status.status_code
     vehicle_status TEXT,          -- Human-readable status name
     is_active INTEGER DEFAULT 1,  -- 1 if status_code IN (0, 1)
@@ -231,6 +258,11 @@ CREATE TABLE IF NOT EXISTS dim_contract (
     lease_type TEXT,
     lease_type_description TEXT,
     contract_duration_months INTEGER,
+    contract_start_date TEXT,
+    contract_end_date TEXT,         -- date(contract_start_date, '+' || contract_duration_months || ' months')
+    months_driven INTEGER,
+    months_remaining INTEGER,
+    days_to_contract_end INTEGER,  -- days between today and contract_end_date (negative = overdue)
     annual_km_allowance INTEGER,
     purchase_price REAL,
     residual_value REAL,
@@ -335,6 +367,44 @@ CREATE TABLE IF NOT EXISTS fact_billing (
 CREATE INDEX IF NOT EXISTS idx_fact_billing_vehicle ON fact_billing(vehicle_id);
 CREATE INDEX IF NOT EXISTS idx_fact_billing_customer ON fact_billing(customer_id);
 
+-- Damage/Accident Facts
+CREATE TABLE IF NOT EXISTS fact_damages (
+    damage_key INTEGER PRIMARY KEY AUTOINCREMENT,
+    damage_id TEXT NOT NULL,
+    vehicle_id INTEGER,
+    driver_number INTEGER,
+    damage_date TEXT,
+    description TEXT,
+    damage_amount REAL,
+    net_damage_cost REAL,              -- calculated: amount - refunded - salvage
+    accident_location TEXT,
+    accident_country_code TEXT,
+    mileage INTEGER,
+    damage_type TEXT,
+    fault_code TEXT,
+    damage_status_code TEXT,
+    damage_recourse TEXT,
+    total_loss_code TEXT,
+    country_code TEXT,
+    reporting_period INTEGER,
+    insurance_company_number INTEGER,
+    third_party_name TEXT,
+    repair_days INTEGER,
+    amount_own_risk REAL,
+    amount_refunded REAL,
+    claimed_deductible REAL,
+    refunded_deductible REAL,
+    salvage_amount REAL,
+    damage_fault_level TEXT,
+    garage_name TEXT,
+
+    FOREIGN KEY (vehicle_id) REFERENCES dim_vehicle(vehicle_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fact_damages_vehicle ON fact_damages(vehicle_id);
+CREATE INDEX IF NOT EXISTS idx_fact_damages_date ON fact_damages(damage_date);
+CREATE INDEX IF NOT EXISTS idx_fact_damages_type ON fact_damages(damage_type);
+
 -- =============================================
 -- PRE-BUILT ANALYTICAL VIEWS (AI-Optimized)
 -- =============================================
@@ -356,6 +426,10 @@ SELECT
     v.lease_type_description,
     v.monthly_lease_amount,
     v.current_odometer_km,
+    v.expected_end_date,
+    v.months_driven,
+    v.months_remaining,
+    v.days_to_contract_end,
     v.vehicle_status,
     d.driver_name AS primary_driver_name,
     d.email_address AS driver_email,
@@ -397,6 +471,9 @@ SELECT
     v.residual_value,
     v.monthly_lease_amount,
     v.lease_duration_months,
+    v.expected_end_date,
+    v.months_driven,
+    v.months_remaining,
     v.annual_km_allowance,
     v.current_odometer_km,
     c.customer_name,
@@ -419,6 +496,10 @@ SELECT
     ct.model_name,
     ct.lease_type_description,
     ct.contract_duration_months,
+    ct.contract_start_date,
+    ct.contract_end_date,
+    ct.months_driven,
+    ct.months_remaining,
     ct.annual_km_allowance,
     ct.purchase_price,
     ct.residual_value,

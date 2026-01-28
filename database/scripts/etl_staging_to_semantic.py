@@ -114,11 +114,14 @@ def load_dim_vehicle(conn):
     cursor.execute("""
         INSERT INTO dim_vehicle (
             vehicle_id, vin_number, registration_number, make_name, model_name,
-            make_and_model, color_name, customer_id, customer_name,
+            make_and_model, color_name,
+            fuel_code, fuel_type, is_electric,
+            customer_id, customer_name,
             contract_position_number, lease_type, lease_type_description,
             purchase_price, residual_value, monthly_lease_amount,
             lease_duration_months, annual_km_allowance, current_odometer_km,
             lease_start_date, lease_end_date,
+            expected_end_date, months_driven, months_remaining, days_to_contract_end,
             vehicle_status_code, vehicle_status, is_active
         )
         SELECT
@@ -129,6 +132,9 @@ def load_dim_vehicle(conn):
             v.model_name,
             COALESCE(v.make_name, '') || ' ' || COALESCE(REPLACE(v.model_name, ',', ''), ''),
             v.color_name,
+            v.fuel_code,
+            fc.fuel_type,
+            COALESCE(fc.is_electric, 0),
             v.customer_no,
             c.customer_name,
             v.contract_position_no,
@@ -147,6 +153,10 @@ def load_dim_vehicle(conn):
             v.current_km,
             v.lease_start_date,
             v.lease_end_date,
+            v.expected_end_date,
+            CAST((julianday('now') - julianday(v.lease_start_date)) / 30.44 AS INTEGER),
+            CAST((julianday(v.expected_end_date) - julianday('now')) / 30.44 AS INTEGER),
+            CAST(julianday(v.expected_end_date) - julianday('now') AS INTEGER),
             v.object_status,
             CASE v.object_status
                 WHEN 0 THEN 'Created'
@@ -162,6 +172,7 @@ def load_dim_vehicle(conn):
             CASE WHEN v.object_status IN (0, 1) THEN 1 ELSE 0 END
         FROM staging_vehicles v
         LEFT JOIN staging_customers c ON v.customer_no = c.customer_id
+        LEFT JOIN ref_fuel_code fc ON v.fuel_code = fc.fuel_code
     """)
     conn.commit()
     count = cursor.execute("SELECT COUNT(*) FROM dim_vehicle").fetchone()[0]
@@ -212,7 +223,9 @@ def load_dim_contract(conn):
         INSERT INTO dim_contract (
             contract_position_number, customer_id, customer_name, contract_number,
             make_name, model_name, lease_type, lease_type_description,
-            contract_duration_months, annual_km_allowance, purchase_price,
+            contract_duration_months, contract_start_date, contract_end_date,
+            months_driven, months_remaining, days_to_contract_end,
+            annual_km_allowance, purchase_price,
             residual_value, total_lease_amount, monthly_rate_total,
             monthly_rate_depreciation, monthly_rate_interest, monthly_rate_maintenance,
             monthly_rate_insurance, monthly_rate_fuel, monthly_rate_tires,
@@ -235,6 +248,11 @@ def load_dim_contract(conn):
                 ELSE ct.lease_type
             END,
             ct.duration_months,
+            ct.start_date,
+            ct.end_date,
+            CAST((julianday('now') - julianday(ct.start_date)) / 30.44 AS INTEGER),
+            CAST((julianday(ct.end_date) - julianday('now')) / 30.44 AS INTEGER),
+            CAST(julianday(ct.end_date) - julianday('now') AS INTEGER),
             ct.km_per_year,
             ct.purchase_price,
             ct.residual_value,
@@ -392,6 +410,63 @@ def load_fact_billing(conn):
     print(f"{count} rows")
 
 
+def load_fact_damages(conn):
+    """Load damages fact table."""
+    print("  Loading fact_damages...", end=" ", flush=True)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM fact_damages")
+
+    cursor.execute("""
+        INSERT INTO fact_damages (
+            damage_id, vehicle_id, driver_number, damage_date,
+            description, damage_amount, net_damage_cost,
+            accident_location, accident_country_code,
+            mileage, damage_type, fault_code, damage_status_code,
+            damage_recourse, total_loss_code, country_code,
+            reporting_period, insurance_company_number,
+            third_party_name, repair_days,
+            amount_own_risk, amount_refunded,
+            claimed_deductible, refunded_deductible,
+            salvage_amount, damage_fault_level, garage_name
+        )
+        SELECT
+            d.damage_id,
+            d.object_no,
+            d.driver_no,
+            d.damage_date,
+            d.description,
+            d.damage_amount,
+            -- net_damage_cost = damage_amount - refunded - salvage
+            COALESCE(d.damage_amount, 0)
+                - COALESCE(d.amount_refunded, 0)
+                - COALESCE(d.salvage_amount, 0),
+            d.accident_location_address,
+            d.accident_country_code,
+            d.mileage,
+            d.damage_type,
+            d.fault_code,
+            d.damage_status_code,
+            d.damage_recourse,
+            d.total_loss_code,
+            d.country_code,
+            d.reporting_period,
+            d.insurance_co_number,
+            d.third_party_name,
+            d.repair_days,
+            d.amount_own_risk,
+            d.amount_refunded,
+            d.claimed_deductible_repair,
+            d.refunded_deductible_repair,
+            d.salvage_amount,
+            d.damage_fault_level,
+            d.garage_name
+        FROM staging_damages d
+    """)
+    conn.commit()
+    count = cursor.execute("SELECT COUNT(*) FROM fact_damages").fetchone()[0]
+    print(f"{count} rows")
+
+
 def populate_metadata_catalog(conn):
     """Populate metadata catalog for AI discovery."""
     print("  Populating metadata catalog...", end=" ", flush=True)
@@ -416,6 +491,7 @@ def populate_metadata_catalog(conn):
         ('ref_order_status', 'Order Statuses', 'Reference table for order status codes and descriptions', 'Reference', 'One row per status code', 'What are the order statuses? Order phases?'),
         ('fact_odometer_reading', 'Odometer & Service Records', 'Historical odometer readings AND maintenance/service records for vehicles. Filter source_type = Service for maintenance records. transaction_description contains repair/service details.', 'Operations', 'One row per reading or service event', 'Vehicle mileage history? Maintenance history for vehicle X? What services were done? Service records for customer Y?'),
         ('fact_billing', 'Billing Records', 'Billing transactions and amounts for vehicles', 'Financial', 'One row per billing record', 'How much was billed? Billing by customer?'),
+        ('fact_damages', 'Damage & Accident Records', 'Records of vehicle damages, accidents, and insurance claims including costs, repair details, and third party information', 'Operations', 'One row per damage/accident event', 'What damages occurred? Damage costs? Accident history for vehicle X? Which vehicles had accidents? Total damage costs by customer? Insurance claims?'),
         ('view_fleet_overview', 'Fleet Overview', 'Comprehensive view of all vehicles with customer and driver information', 'Fleet', 'One row per vehicle', 'Show me the fleet. List all vehicles with details.'),
         ('view_customer_fleet_summary', 'Customer Fleet Summary', 'Summary of fleet size and value by customer', 'Customer', 'One row per customer', 'Fleet size by customer? How many vehicles does each customer have?'),
         ('view_customer_contracts', 'Customer Contracts', 'Contract totals and values by customer', 'Contract', 'One row per customer', 'Total contract value by customer?'),
@@ -446,6 +522,11 @@ def populate_metadata_catalog(conn):
         ('dim_vehicle', 'monthly_lease_amount', 'Monthly Lease', 'Monthly lease payment amount', 'REAL', '5000.00', None, 1, 0, 0),
         ('dim_vehicle', 'current_odometer_km', 'Current Odometer (km)', 'Latest recorded odometer reading in kilometers', 'INTEGER', '107163', None, 1, 0, 0),
         ('dim_vehicle', 'purchase_price', 'Purchase Price', 'Original purchase price of the vehicle', 'REAL', '205000.00', None, 1, 0, 0),
+        ('dim_vehicle', 'lease_end_date', 'Lease End Date (Source)', 'Raw source-system recorded end date. WARNING: may be stale or missing. Do NOT use for expiration analysis — use expected_end_date instead.', 'TEXT', None, 'Do NOT use for expiration queries', 0, 1, 0),
+        ('dim_vehicle', 'expected_end_date', 'Expected End Date', 'Expected contract termination date, computed as lease_start_date + lease_duration_months. USE THIS for all expiration/ending queries.', 'TEXT', '2026-06-15', 'date(lease_start_date, +duration months). Use this for expiring/ending questions.', 0, 1, 0),
+        ('dim_vehicle', 'months_driven', 'Months Driven', 'Number of months from lease start date to today', 'INTEGER', '24, 36', 'months between lease_start_date and now', 1, 0, 0),
+        ('dim_vehicle', 'months_remaining', 'Months Remaining', 'Number of months from today to expected end date. Negative means overdue. USE THIS for expiration queries (e.g. months_remaining BETWEEN 0 AND 3).', 'INTEGER', '12, 3, -2', 'months between now and expected_end_date. Use for expiring/ending filters.', 1, 0, 0),
+        ('dim_vehicle', 'days_to_contract_end', 'Days to Contract End', 'Number of days from today to expected end date. Negative means overdue. Use for precise renewal timing and urgency analysis.', 'INTEGER', '90, 30, -5', 'julianday(expected_end_date) - julianday(now). Use for renewal intelligence.', 1, 0, 0),
         ('dim_vehicle', 'vehicle_status_code', 'Status Code', 'Numeric status code (0=Created, 1=Active, 2-9=Terminated stages)', 'INTEGER', '0, 1, 2, 3, 4, 5, 8, 9', None, 0, 1, 0),
         ('dim_vehicle', 'vehicle_status', 'Vehicle Status', 'Human-readable status description', 'TEXT', 'Active, Terminated - Invoicing Stopped', None, 0, 1, 0),
 
@@ -453,6 +534,11 @@ def populate_metadata_catalog(conn):
         ('dim_contract', 'contract_position_number', 'Contract Position', 'Unique identifier for the contract position', 'INTEGER', '1000233', None, 0, 1, 1),
         ('dim_contract', 'monthly_rate_total', 'Total Monthly Rate', 'Total monthly lease rate including all components', 'REAL', '5392.00', None, 1, 0, 0),
         ('dim_contract', 'contract_duration_months', 'Contract Duration', 'Length of contract in months', 'INTEGER', '48', None, 1, 0, 0),
+        ('dim_contract', 'contract_start_date', 'Contract Start Date', 'Date the contract/lease began', 'TEXT', '2022-01-15', None, 0, 1, 0),
+        ('dim_contract', 'contract_end_date', 'Contract End Date', 'Expected end date, computed as start_date + duration_months', 'TEXT', '2026-01-15', 'date(contract_start_date, +duration months)', 0, 1, 0),
+        ('dim_contract', 'months_driven', 'Months Driven', 'Number of months from contract start date to today', 'INTEGER', '24, 36', 'months between contract_start_date and now', 1, 0, 0),
+        ('dim_contract', 'months_remaining', 'Months Remaining', 'Number of months from today to contract end date. Negative means overdue.', 'INTEGER', '12, 3, -2', 'months between now and contract_end_date', 1, 0, 0),
+        ('dim_contract', 'days_to_contract_end', 'Days to Contract End', 'Number of days from today to contract end date. Negative means overdue. Use for precise renewal timing.', 'INTEGER', '90, 30, -5', 'julianday(contract_end_date) - julianday(now)', 1, 0, 0),
         ('dim_contract', 'annual_km_allowance', 'Annual KM Allowance', 'Kilometers allowed per year before excess charges', 'INTEGER', '25000', None, 1, 0, 0),
         ('dim_contract', 'excess_km_rate', 'Excess KM Rate', 'Charge per kilometer over the allowance', 'REAL', '0.66', None, 1, 0, 0),
 
@@ -461,6 +547,23 @@ def populate_metadata_catalog(conn):
         ('fact_odometer_reading', 'source_type', 'Record Source', "Type of record: 'Manual Entry', 'Fuel Transaction', or 'Service'. Filter source_type = 'Service' for maintenance records", 'TEXT', 'Manual Entry, Fuel Transaction, Service', "Use source_type = 'Service' to get maintenance records only", 0, 1, 0),
         ('fact_odometer_reading', 'transaction_amount', 'Service Cost', 'Cost amount of the maintenance or service event', 'REAL', '525.00, 100.00', None, 1, 0, 0),
         ('fact_odometer_reading', 'supplier_id', 'Supplier ID', 'Identifier of the service supplier/vendor who performed maintenance', 'INTEGER', None, None, 0, 1, 0),
+
+        # Damages
+        ('fact_damages', 'damage_id', 'Damage ID', 'Unique identifier for the damage/accident event', 'TEXT', None, None, 0, 1, 1),
+        ('fact_damages', 'vehicle_id', 'Vehicle ID', 'Vehicle involved in the damage (links to dim_vehicle)', 'INTEGER', None, None, 0, 1, 0),
+        ('fact_damages', 'damage_date', 'Damage Date', 'Date when the damage/accident occurred', 'TEXT', '2024-03-15', None, 0, 1, 0),
+        ('fact_damages', 'description', 'Damage Description', 'Full description of the accident/damage event', 'TEXT', None, None, 0, 1, 0),
+        ('fact_damages', 'damage_amount', 'Damage Amount', 'Total damage repair cost', 'REAL', '5000.00', None, 1, 0, 0),
+        ('fact_damages', 'net_damage_cost', 'Net Damage Cost', 'Net cost after refunds and salvage (damage_amount - amount_refunded - salvage_amount)', 'REAL', '3500.00', 'damage_amount - amount_refunded - salvage_amount', 1, 0, 0),
+        ('fact_damages', 'damage_type', 'Damage Type', 'Type/category of the damage', 'TEXT', None, None, 0, 1, 0),
+        ('fact_damages', 'fault_code', 'Fault Code', 'Code indicating fault attribution', 'TEXT', None, None, 0, 1, 0),
+        ('fact_damages', 'repair_days', 'Repair Days', 'Number of days the repair took', 'INTEGER', '5', None, 1, 0, 0),
+        ('fact_damages', 'amount_own_risk', 'Own Risk Amount', 'Deductible amount (own risk) for the damage', 'REAL', '500.00', None, 1, 0, 0),
+        ('fact_damages', 'amount_refunded', 'Refunded Amount', 'Amount refunded by insurance or third party', 'REAL', '2000.00', None, 1, 0, 0),
+        ('fact_damages', 'salvage_amount', 'Salvage Amount', 'Amount recovered from salvage', 'REAL', None, None, 1, 0, 0),
+        ('fact_damages', 'third_party_name', 'Third Party Name', 'Name of the third party involved in the accident', 'TEXT', None, None, 0, 1, 0),
+        ('fact_damages', 'garage_name', 'Garage Name', 'Name of the repair garage', 'TEXT', None, None, 0, 1, 0),
+        ('fact_damages', 'country_code', 'Country Code', 'Country where the damage record belongs', 'TEXT', None, None, 0, 1, 0),
     ]
 
     cursor.executemany("""
@@ -477,6 +580,10 @@ def populate_metadata_catalog(conn):
         ('fact_odometer_reading', 'vehicle_id', 'dim_vehicle', 'vehicle_id', 'many-to-one', 'Each odometer reading belongs to one vehicle'),
         ('fact_billing', 'vehicle_id', 'dim_vehicle', 'vehicle_id', 'many-to-one', 'Each billing record is for one vehicle'),
         ('fact_billing', 'customer_id', 'dim_customer', 'customer_id', 'many-to-one', 'Each billing record is for one customer'),
+        ('fact_odometer_reading', 'reading_date_key', 'dim_date', 'date_key', 'many-to-one', 'Each odometer reading links to a calendar date'),
+        ('dim_vehicle', 'vehicle_status_code', 'ref_vehicle_status', 'status_code', 'many-to-one', 'Each vehicle has one status from the status reference table'),
+        ('dim_group', 'customer_id', 'dim_customer', 'customer_id', 'many-to-one', 'Each group belongs to one customer'),
+        ('fact_damages', 'vehicle_id', 'dim_vehicle', 'vehicle_id', 'many-to-one', 'Each damage record is for one vehicle'),
     ]
 
     cursor.executemany("""
@@ -504,6 +611,16 @@ def populate_metadata_catalog(conn):
         ('Delivery Phase', 'Final stages: Insurance, Registration, Driver Pack, Delivered, Lease Schedule', 'fulfillment, delivery', 'ref_order_status', 'status_code IN (3, 4, 5, 6, 7)'),
         ('Maintenance Record', 'A service or repair event recorded for a vehicle, including description, cost, and mileage at time of service', 'service record, repair, service history, maintenance history', 'fact_odometer_reading', "source_type = 'Service' in fact_odometer_reading"),
         ('Service Description', 'Free-text description of maintenance work performed on a vehicle, such as km-based services, part replacements, or inspections', 'repair description, service details, work done', 'fact_odometer_reading', "fact_odometer_reading.transaction_description contains the text"),
+        ('Damage', 'A recorded damage or accident event for a vehicle, including repair costs, insurance claims, and third party information', 'accident, claim, incident, crash, collision', 'fact_damages', None),
+        ('Net Damage Cost', 'The effective cost of a damage after deducting refunds and salvage amounts', 'net cost, effective damage cost', 'fact_damages', 'damage_amount - amount_refunded - salvage_amount'),
+        ('Own Risk', 'The deductible amount the lessee must pay out of pocket for a damage claim', 'deductible, excess, franchise', 'fact_damages', None),
+        ('Total Loss', 'A vehicle declared as a total loss where repair costs exceed the vehicle value', 'write-off, total write-off', 'fact_damages', "total_loss_code is set when vehicle is a total loss"),
+        ('Fuel Code', 'Numeric code indicating the fuel or energy type of a vehicle: 1=Petrol Unleaded 91 E-Plus, 2=Petrol Unleaded 95 Special, 3=Diesel, 4=LPG, 6=Petrol Unleaded 98 Super, 7=Full Electric (BEV), 8=Plugin Hybrid (PHEV), 9=Hybrid (HEV)', 'fuel type, energy type, propulsion, powertrain', 'dim_vehicle, ref_fuel_code', 'Petrol: fuel_code IN (1,2,6), Diesel: fuel_code=3, LPG: fuel_code=4, Electric (all): fuel_code IN (7,8,9), BEV only: fuel_code=7, Hybrid: fuel_code IN (8,9)'),
+        ('Electric Vehicle', 'A vehicle powered fully or partially by electricity, including BEV (full electric), PHEV (plugin hybrid), and HEV (hybrid)', 'EV, BEV, PHEV, HEV, zero emission, electric car', 'dim_vehicle, ref_fuel_code', 'fuel_code IN (7, 8, 9) or is_electric = 1'),
+        ('Expected End Date', 'The expected contract termination date, computed as lease start date plus duration months', 'expected termination, contract end, lease end', 'dim_vehicle, dim_contract', 'date(lease_start_date, +lease_duration_months months)'),
+        ('Months Driven', 'Number of months elapsed from the lease/contract start date to today', 'time on lease, months elapsed, contract age', 'dim_vehicle, dim_contract', 'months between start_date and now'),
+        ('Months Remaining', 'Number of months from today to the expected contract end date. Negative means the contract is past its expected end.', 'time left, contract remaining, expiring soon', 'dim_vehicle, dim_contract', 'months between now and expected_end_date'),
+        ('Days to Contract End', 'Number of days from today to the expected contract end date. Use for precise renewal timing and urgency-based prioritization. Negative values indicate overdue contracts. Ideal for AI-driven renewal intelligence and alerts.', 'days remaining, days left, renewal countdown, contract countdown, days until expiry', 'dim_vehicle, dim_contract', 'julianday(expected_end_date) - julianday(now)'),
     ]
 
     cursor.executemany("""
@@ -605,6 +722,7 @@ def main():
     print("Loading fact tables...")
     load_fact_odometer(conn)
     load_fact_billing(conn)
+    load_fact_damages(conn)
     print()
 
     print("Populating metadata and KPIs...")
@@ -622,7 +740,7 @@ def main():
     tables = [
         'dim_date', 'dim_customer', 'dim_vehicle', 'dim_driver',
         'dim_contract', 'dim_group', 'dim_make_model',
-        'fact_odometer_reading', 'fact_billing',
+        'fact_odometer_reading', 'fact_billing', 'fact_damages',
         'semantic_table_catalog', 'semantic_column_catalog',
         'agg_fleet_kpis', 'agg_customer_kpis'
     ]
