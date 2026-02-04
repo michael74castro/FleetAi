@@ -48,7 +48,12 @@ async def chat(
     """
     ai_service = AIService(db)
 
-    # Get or create conversation
+    # Check if existing conversation (read-only lookup)
+    is_new_conversation = not request.conversation_id
+    conversation = None
+    conversation_id = None
+    history = []
+
     if request.conversation_id:
         result = await db.execute(
             select(AIConversation).where(
@@ -60,15 +65,19 @@ async def chat(
 
         if not conversation:
             raise HTTPException(status_code=404, detail="Conversation not found")
-    else:
-        # Create new conversation
-        conversation = AIConversation(
-            user_id=user.user_id,
-            title=request.message[:50] + "..." if len(request.message) > 50 else request.message,
-            context=json.dumps(request.context) if request.context else None
+        conversation_id = conversation.conversation_id
+
+        # Get conversation history for existing conversations
+        result = await db.execute(
+            select(AIMessage).where(
+                AIMessage.conversation_id == conversation_id
+            ).order_by(AIMessage.created_at.desc()).limit(10)
         )
-        db.add(conversation)
-        await db.flush()
+        history = list(reversed(result.scalars().all()))
+    else:
+        # Generate conversation_id upfront (UUID, no DB flush needed)
+        import uuid
+        conversation_id = str(uuid.uuid4())
 
     # Get user context for AI - admins/super users have full access
     customer_ids = None
@@ -82,23 +91,9 @@ async def chat(
         )
         customer_ids = [row[0] for row in result.fetchall()]
 
-    # Save user message
-    user_message = AIMessage(
-        conversation_id=conversation.conversation_id,
-        role="user",
-        content=request.message
-    )
-    db.add(user_message)
-
-    # Get conversation history
-    result = await db.execute(
-        select(AIMessage).where(
-            AIMessage.conversation_id == conversation.conversation_id
-        ).order_by(AIMessage.created_at.desc()).limit(10)
-    )
-    history = list(reversed(result.scalars().all()))
-
-    # Generate AI response
+    # Generate AI response BEFORE any writes
+    # This avoids pending INSERTs being rolled back by concurrent sessions
+    # sharing the same SQLite connection (StaticPool)
     response = await ai_service.generate_response(
         user_message=request.message,
         conversation_history=history,
@@ -109,12 +104,43 @@ async def chat(
         }
     )
 
-    # Save assistant message
+    # === All writes happen here, atomically ===
+
+    # Create new conversation if needed
+    if is_new_conversation:
+        conversation = AIConversation(
+            conversation_id=conversation_id,
+            user_id=user.user_id,
+            title=request.message[:50] + "..." if len(request.message) > 50 else request.message,
+            context=json.dumps(request.context) if request.context else None
+        )
+        db.add(conversation)
+        await db.flush()
+
+    # Save user message
+    user_message = AIMessage(
+        conversation_id=conversation_id,
+        role="user",
+        content=request.message
+    )
+    db.add(user_message)
+
+    # Save assistant message - include data and chart_config in metadata for persistence
+    message_metadata = {
+        **(response.get("metadata") or {}),
+    }
+    # Store data (limited to 100 rows to prevent huge DB entries)
+    if response.get("data"):
+        message_metadata["data"] = response["data"][:100]
+    # Store chart config
+    if response.get("chart_config"):
+        message_metadata["chart_config"] = response["chart_config"]
+
     assistant_message = AIMessage(
-        conversation_id=conversation.conversation_id,
+        conversation_id=conversation_id,
         role="assistant",
         content=response["message"],
-        metadata=json.dumps(response.get("metadata", {}))
+        message_metadata=json.dumps(message_metadata)
     )
     db.add(assistant_message)
 
@@ -126,13 +152,13 @@ async def chat(
     await db.refresh(assistant_message)
 
     return ChatResponse(
-        conversation_id=str(conversation.conversation_id),
+        conversation_id=str(conversation_id),
         message=MessageResponse(
             message_id=assistant_message.message_id,
             conversation_id=str(assistant_message.conversation_id),
             role=assistant_message.role,
             content=assistant_message.content,
-            metadata=json.loads(assistant_message.metadata) if assistant_message.metadata else None,
+            metadata=json.loads(assistant_message.message_metadata) if assistant_message.message_metadata else None,
             created_at=assistant_message.created_at
         ),
         data=response.get("data"),
@@ -218,7 +244,7 @@ async def get_conversation(
             conversation_id=str(m.conversation_id),
             role=m.role,
             content=m.content,
-            metadata=json.loads(m.metadata) if m.metadata else None,
+            metadata=json.loads(m.message_metadata) if m.message_metadata else None,
             created_at=m.created_at
         )
         for m in messages
@@ -299,17 +325,17 @@ async def generate_sql(
     audit = AISQLAudit(
         user_id=user.user_id,
         user_query=request.query,
-        generated_sql=sql_result["sql"],
+        generated_sql=sql_result.get("sql"),
         was_safe=sql_result["is_safe"],
         safety_notes=sql_result.get("safety_notes")
     )
 
-    # Execute if requested and safe
+    # Execute if requested and safe (only if SQL was actually generated)
     query_results = None
     row_count = None
     execution_time = None
 
-    if request.execute and sql_result["is_safe"]:
+    if request.execute and sql_result["is_safe"] and sql_result.get("sql"):
         start = datetime.utcnow()
         query_results, row_count = await ai_service.execute_safe_query(
             sql_result["sql"],
@@ -326,7 +352,7 @@ async def generate_sql(
 
     return SQLGenerationResponse(
         user_query=request.query,
-        generated_sql=sql_result["sql"],
+        generated_sql=sql_result.get("sql"),
         explanation=sql_result["explanation"],
         is_safe=sql_result["is_safe"],
         safety_notes=sql_result.get("safety_notes"),

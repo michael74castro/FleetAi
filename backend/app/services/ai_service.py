@@ -71,6 +71,32 @@ class AIService:
         # Ensure domain knowledge is cached before building prompts
         await self._load_domain_knowledge(self.db)
 
+        # Pre-check: Registration expiry queries (not available in database)
+        query_lower = user_message.lower()
+        registration_keywords = ['registration expir', 'license expir', 'licence expir',
+                                  'plate expir', 'registration renewal', 'license renewal',
+                                  'licence renewal', 'registration is expiring', 'plates expiring']
+        if any(kw in query_lower for kw in registration_keywords):
+            return {
+                "message": (
+                    "I noticed you're asking about vehicle registration expiry dates. "
+                    "Unfortunately, vehicle registration renewal dates (government license plate renewal) "
+                    "are not tracked in this system.\n\n"
+                    "However, I can help you with **contract/lease expiration data**:\n"
+                    "- 'Show me vehicles with contracts expiring next month'\n"
+                    "- 'Which vehicles are ending their lease in the next 3 months?'\n"
+                    "- 'List vehicles where months_remaining is less than 3'\n\n"
+                    "Would you like me to show contract expiration data instead?"
+                ),
+                "data": None,
+                "suggestions": [
+                    "Show vehicles with contracts expiring next month",
+                    "List vehicles ending lease in next 3 months",
+                    "How many vehicles have contracts expiring this year?"
+                ],
+                "sources": None
+            }
+
         # Build system prompt
         system_prompt = self._build_system_prompt(user_context)
 
@@ -120,10 +146,40 @@ class AIService:
 
             # If data was requested, try to generate and execute SQL
             if needs_data:
+                # Check for common aggregation patterns and handle directly
+                import re
+                aggregation_result = await self._handle_aggregation_query(user_message.lower())
+                if aggregation_result:
+                    result["data"] = aggregation_result["data"]
+                    result["message"] = aggregation_result["message"]
+                    chart_config = self._detect_chart_config(result["data"], user_message)
+                    if chart_config:
+                        result["chart_config"] = chart_config
+                    result["suggestions"] = self._generate_suggestions(user_message, user_context)
+                    return result
+
+                # Check for service cost/invoice queries (maintenance, tyres, etc.)
+                service_result = await self._handle_service_cost_query(user_message.lower())
+                if service_result:
+                    result["data"] = service_result["data"]
+                    result["message"] = service_result["message"]
+                    chart_config = self._detect_chart_config(result["data"], user_message)
+                    if chart_config:
+                        result["chart_config"] = chart_config
+                    result["suggestions"] = self._generate_suggestions(user_message, user_context)
+                    return result
+
+                # Build conversation context for SQL generation
+                conversation_context = "\n".join([
+                    f"{msg.role}: {msg.content}"
+                    for msg in conversation_history[-6:]  # Last 6 messages for context
+                ])
+
                 sql_result = await self.generate_sql(
                     user_message,
                     user_context,
-                    execute=True
+                    execute=True,
+                    conversation_context=conversation_context
                 )
                 if sql_result.get("results"):
                     result["data"] = sql_result["results"][:100]  # Limit rows
@@ -149,7 +205,8 @@ class AIService:
         self,
         user_query: str,
         user_context: Dict[str, Any],
-        execute: bool = False
+        execute: bool = False,
+        conversation_context: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Generate SQL from natural language query.
@@ -158,6 +215,7 @@ class AIService:
             user_query: Natural language query
             user_context: User context for RLS
             execute: Whether to execute the generated SQL
+            conversation_context: Previous conversation messages for context
 
         Returns:
             Dict with sql, explanation, is_safe, results
@@ -165,11 +223,94 @@ class AIService:
         # Ensure domain knowledge is cached
         await self._load_domain_knowledge(self.db)
 
+        # Pre-check: Registration expiry queries (not available in database)
+        query_lower = user_query.lower()
+        registration_keywords = ['registration expir', 'license expir', 'licence expir',
+                                  'plate expir', 'registration renewal', 'license renewal',
+                                  'licence renewal', 'registration is expiring', 'plates expiring']
+        if any(kw in query_lower for kw in registration_keywords):
+            return {
+                "user_query": user_query,
+                "sql": None,
+                "explanation": (
+                    "Vehicle registration expiry dates (government license plate renewal) "
+                    "are not tracked in this system. The database contains contract/lease "
+                    "expiration data instead. Would you like to see vehicles with contracts "
+                    "expiring soon? Try asking: 'Show me vehicles with contracts expiring next month' "
+                    "or 'Which vehicles are ending their lease in the next 3 months?'"
+                ),
+                "is_safe": True,
+                "safety_notes": None,
+                "results": None,
+                "row_count": None,
+                "execution_time_ms": None
+            }
+
         # Get available tables/views (structural reference)
         schema_info = await self._get_schema_info()
 
         # Get semantic domain block (dynamic from cache, or static fallback)
         domain_block = self._domain_cache.get("sql_prompt_domain_block") or self._get_static_fallback_sql_domain()
+
+        # Detect aggregation patterns and directly generate SQL for common patterns
+        import re
+        aggregation_patterns = [
+            (r'(?:show|get|list|display)?\s*(?:me\s+)?(?:the\s+)?(?:number|count)?\s*(?:of\s+)?vehicles?\s+by\s+(\w+)', 'vehicles', 'dim_vehicle'),
+            (r'(?:show|get|list|display)?\s*(?:me\s+)?(?:the\s+)?vehicles?\s+(?:breakdown\s+)?by\s+(\w+)', 'vehicles', 'dim_vehicle'),
+            (r'(?:show|get|list|display)?\s*(?:me\s+)?(?:the\s+)?(?:number|count)?\s*(?:of\s+)?contracts?\s+by\s+(\w+)', 'contracts', 'dim_contract'),
+        ]
+
+        # Map common dimension names to actual column names
+        dim_mapping = {
+            'status': 'vehicle_status',
+            'make': 'make_name',
+            'model': 'model_name',
+            'customer': 'customer_name',
+            'type': 'body_type',
+            'year': 'model_year',
+            'fuel': 'fuel_type',
+        }
+
+        for pattern, entity, table in aggregation_patterns:
+            match = re.search(pattern, query_lower, re.IGNORECASE)
+            if match:
+                dimension = match.group(1).lower()
+                col_name = dim_mapping.get(dimension, dimension)
+
+                # Directly generate the aggregation SQL without calling the AI
+                direct_sql = f"SELECT {col_name}, COUNT(*) as {entity}_count FROM {table} GROUP BY {col_name} ORDER BY {entity}_count DESC"
+
+                result = {
+                    "sql": direct_sql,
+                    "explanation": f"This query counts {entity} grouped by {dimension}.",
+                    "is_safe": True,
+                    "results": None,
+                    "row_count": None
+                }
+
+                # Execute if requested
+                if execute:
+                    try:
+                        results, row_count = await self.execute_safe_query(direct_sql, user_context.get("customer_ids"))
+                        result["results"] = results
+                        result["row_count"] = row_count
+                    except Exception as e:
+                        logger.error(f"Direct aggregation query execution failed: {e}")
+
+                return result
+
+        # Intercept service cost/invoice queries (maintenance, tyres, fuel, etc.)
+        service_result = await self._handle_service_cost_query(query_lower)
+        if service_result:
+            return {
+                "sql": "(handled by service cost handler)",
+                "explanation": service_result.get("message", ""),
+                "is_safe": True,
+                "results": service_result.get("data"),
+                "row_count": len(service_result.get("data", []))
+            }
+
+        aggregation_hint = ""
 
         db_type = "SQLite" if settings.DATABASE_TYPE == "sqlite" else "SQL Server"
         system_prompt = f"""You are a SQL expert for a fleet management database (vehicle leasing company). Generate safe, read-only SQL queries.
@@ -192,9 +333,20 @@ RULES:
 8. Prefer pre-built views over complex JOINs when they answer the question
 9. Use is_active = 1 / is_active = 0 for active/terminated vehicle filtering
 10. Follow the defined relationships for JOINs between tables
+11. For contract expiration/ending/remaining questions: ALWAYS query dim_vehicle and use expected_end_date or months_remaining. NEVER use lease_end_date (stale source field that will return wrong results). NEVER query dim_contract for expiration (its date columns may be NULL). Example: "vehicles expiring in 3 months" = SELECT COUNT(*) FROM dim_vehicle WHERE months_remaining BETWEEN 0 AND 3
+12. CRITICAL - "Registration expiry" vs "Contract expiry" are DIFFERENT: Vehicle registration expiry (government license plate renewal) is NOT tracked in this database. Contract/lease expiry (expected_end_date) IS available. If user asks about "registration expiring" or "license plate renewal", respond with JSON {{"sql": null, "explanation": "Vehicle registration expiry dates (government license plate renewal) are not tracked in this system. However, I can show you contract/lease expiration data. Would you like to see vehicles with contracts expiring soon instead?", "is_safe": true}}
+13. CRITICAL - For "by" or "per" or "breakdown" questions (e.g., "vehicles by status", "count by make", "breakdown by customer"), ALWAYS use GROUP BY and COUNT/SUM aggregations. Example: "vehicles by status" = SELECT vehicle_status, COUNT(*) as vehicle_count FROM dim_vehicle GROUP BY vehicle_status ORDER BY vehicle_count DESC
+14. CRITICAL - For visualization/chart queries, return aggregated data with clear dimension and measure columns. The result should have a categorical column (for x-axis) and numeric columns (for y-axis). Never return raw detail rows for chart queries.
 
 User's role: {user_context.get('role', 'unknown')}
 Customer access: {user_context.get('customer_ids', 'all')}
+
+{f'''CONVERSATION CONTEXT (use this to understand what the user is referring to):
+{conversation_context}
+''' if conversation_context else ''}
+{aggregation_hint}
+
+User's query: {user_query}
 
 Respond with JSON format:
 {{"sql": "SELECT ...", "explanation": "This query...", "is_safe": true}}
@@ -570,7 +722,157 @@ Maintenance / Service Records (fact_odometer_reading):
   transaction_description contains free-text repair/service details (e.g. '10000km service done')
   transaction_amount holds the cost of the service
   Use LIKE '%keyword%' on transaction_description to search for specific services
-  JOIN to dim_vehicle via vehicle_id for vehicle/customer context""")
+  JOIN to dim_vehicle via vehicle_id for vehicle/customer context
+
+Fuel Codes (dim_vehicle.fuel_code / CCOB_OBFUCD_Fuel_Code):
+  1 = Petrol - Unleaded 91 E-Plus
+  2 = Petrol - Unleaded 95 Special
+  3 = Diesel
+  4 = LPG
+  6 = Petrol - Unleaded 98 Super
+  7 = Electric - Full Electric Vehicle (BEV)
+  8 = Electric - Plugin Hybrid Electric Vehicle (PHEV)
+  9 = Electric - Hybrid Electric Vehicle (HEV)
+  Note: Code 5 is not in use.
+  Fuel type groupings:
+    Petrol: fuel_code IN (1, 2, 6)
+    Diesel: fuel_code = 3
+    LPG: fuel_code = 4
+    Electric (all): fuel_code IN (7, 8, 9)
+    Full Electric only (BEV): fuel_code = 7
+    Hybrid (PHEV + HEV): fuel_code IN (8, 9)
+
+Contract Duration & Termination:
+  IMPORTANT: For any question about expiring, ending, or remaining time, always use expected_end_date
+  and months_remaining. NEVER use lease_end_date for expiration queries — it is a raw source-system
+  field that may be stale or empty.
+  expected_end_date = lease_start_date + lease_duration_months (pre-computed in dim_vehicle and dim_contract)
+  months_driven = months from lease_start_date / contract_start_date to today
+  months_remaining = months from today to expected_end_date / contract_end_date
+  Negative months_remaining means the contract is overdue / past expected end.
+  "Vehicles expiring in 3 months" or "ending in 3 months":
+    SELECT COUNT(*) FROM dim_vehicle WHERE months_remaining BETWEEN 0 AND 3
+  "Contracts expiring this year":
+    SELECT COUNT(*) FROM dim_vehicle WHERE expected_end_date BETWEEN date('now') AND date('now','+12 months')
+  Vehicle and contract are interchangeable — every vehicle has a contract.
+  dim_vehicle has: expected_end_date, months_driven, months_remaining (USE THESE for expiration queries)
+  dim_contract has: contract_start_date, contract_end_date, months_driven, months_remaining
+  lease_end_date: Raw source-system end date — DO NOT use for expiration analysis, use expected_end_date instead
+
+CRITICAL - Registration vs Contract Expiry (DIFFERENT CONCEPTS):
+  "Vehicle registration expiry" = government license plate renewal date (NOT AVAILABLE IN DATABASE)
+  "Contract/lease expiry" = when the lease agreement with the fleet company ends (AVAILABLE via expected_end_date, months_remaining)
+  The database does NOT contain vehicle registration renewal dates.
+  If the user asks about "registration expiring", "registration renewal", or "license plate expiry":
+    - Explain that vehicle registration expiry dates are not tracked in this system
+    - Offer to show contract/lease expiration data instead using expected_end_date
+    - Do NOT silently substitute contract data for registration queries
+
+Renewal Intelligence (days_to_contract_end and Orders):
+  days_to_contract_end = number of days from today to expected_end_date (in dim_vehicle)
+    Negative value = vehicle is OVERDUE (past expected end date)
+    0-90 = vehicle is DUE FOR RENEWAL (within 90 days)
+    > 90 = vehicle not yet due
+
+  Linking Vehicles to Renewal Orders:
+    staging_orders.previous_object_no = the vehicle_id being REPLACED by this order
+    If previous_object_no IS NOT NULL: this is a RENEWAL ORDER (replacing an existing vehicle)
+    If previous_object_no IS NULL: this is a NEW ORDER (new vehicle, not a replacement)
+    Active orders (not yet delivered): order_status_code < 6
+    Delivered orders: order_status_code >= 6
+
+  Common Renewal Queries:
+    "Overdue vehicles with an order":
+      SELECT v.* FROM dim_vehicle v
+      WHERE v.is_active = 1 AND v.days_to_contract_end < 0
+        AND v.vehicle_id IN (SELECT previous_object_no FROM staging_orders WHERE order_status_code < 6)
+
+    "Overdue vehicles without an order":
+      SELECT v.* FROM dim_vehicle v
+      WHERE v.is_active = 1 AND v.days_to_contract_end < 0
+        AND v.vehicle_id NOT IN (SELECT previous_object_no FROM staging_orders WHERE previous_object_no IS NOT NULL AND order_status_code < 6)
+
+    "Overdue vehicles with order, grouped by order status":
+      SELECT o.order_status, COUNT(*) as count
+      FROM dim_vehicle v
+      JOIN staging_orders o ON v.vehicle_id = o.previous_object_no
+      WHERE v.is_active = 1 AND v.days_to_contract_end < 0 AND o.order_status_code < 6
+      GROUP BY o.order_status
+
+    "Vehicles due for renewal (0-90 days) without order":
+      SELECT v.* FROM dim_vehicle v
+      WHERE v.is_active = 1 AND v.days_to_contract_end BETWEEN 0 AND 90
+        AND v.vehicle_id NOT IN (SELECT previous_object_no FROM staging_orders WHERE previous_object_no IS NOT NULL AND order_status_code < 6)
+
+Reporting Period Format (fact_car_reports, fact_exploitation_services, fact_maintenance_approvals):
+  CRITICAL: reporting_period is a YYYYMM integer (e.g. 202601 = January 2026).
+  Do NOT join reporting_period to dim_date.date_key (different format).
+  For date filtering, compare directly: reporting_period >= 202502 (for months after Feb 2025)
+  To get last 12 months: reporting_period >= CAST(strftime('%Y%m', date('now', '-12 months')) AS INTEGER)
+  IMPORTANT: When querying by registration_number, always add v.is_active = 1 to filter for the active vehicle
+    (vehicles may be re-leased with the same registration but different object numbers).
+
+Monthly Service Costs and Invoices (fact_exploitation_services):
+  CRITICAL: For ANY question about cost, invoice, or spending per month by service type,
+  ALWAYS use fact_exploitation_services. This is THE table for monthly financial data.
+    vehicle_id = object number (join to dim_vehicle.vehicle_id)
+    total_monthly_cost = actual cost in AED for that month
+    total_monthly_invoice = actual invoiced amount in AED for that month
+    service_code = exploitation/service type (integer)
+    reporting_period = YYYYMM integer (e.g. 202501 = January 2025)
+
+  Common exploitation/service codes (from ref_domain_translation domain_id=5):
+    11 = Depreciation, 100 = Comprehensive insurance, 140 = Third party insurance
+    170 = Insurance (general), 580 = Maintenance and repairs, 581 = Tyres
+    582 = Tyre repair, 583 = Miscellaneous, 585 = Wheel alignment
+    600 = Fuel, 620 = Replacement vehicle, 640 = Security Pass Certificate Fee
+    650 = Licensing, 660 = Roadside assistance, 680 = Traffic fines
+    700 = Fee, 711 = Finance administration fee, 999 = Interest
+
+  To look up service code descriptions:
+    JOIN ref_domain_translation dt ON CAST(dt.domain_value AS INTEGER) = es.service_code
+      AND dt.domain_id = 5 AND dt.language_code = 'E'
+
+  Join to vehicle: fact_exploitation_services.vehicle_id = dim_vehicle.vehicle_id
+
+  Example: "Maintenance invoice for registration 3946615 for January 2025":
+    SELECT es.reporting_period, es.total_monthly_cost as cost_aed, es.total_monthly_invoice as invoice_aed
+    FROM fact_exploitation_services es
+    JOIN dim_vehicle v ON es.vehicle_id = v.vehicle_id
+    WHERE v.registration_number = '3946615' AND v.is_active = 1
+      AND es.service_code = 580
+      AND es.reporting_period = 202501
+
+  Example: "Monthly maintenance cost and invoice for last 12 months":
+    SELECT es.reporting_period, SUM(es.total_monthly_cost) as maintenance_cost, SUM(es.total_monthly_invoice) as maintenance_invoice
+    FROM fact_exploitation_services es
+    JOIN dim_vehicle v ON es.vehicle_id = v.vehicle_id
+    WHERE v.registration_number = '3946615' AND v.is_active = 1
+      AND es.service_code = 580
+      AND es.reporting_period >= CAST(strftime('%Y%m', date('now', '-12 months')) AS INTEGER)
+    GROUP BY es.reporting_period ORDER BY es.reporting_period
+
+  Example: "All service costs for a vehicle by service type":
+    SELECT dt.domain_text as service_description, es.service_code,
+           SUM(es.total_monthly_cost) as total_cost, SUM(es.total_monthly_invoice) as total_invoice
+    FROM fact_exploitation_services es
+    JOIN dim_vehicle v ON es.vehicle_id = v.vehicle_id
+    LEFT JOIN ref_domain_translation dt ON CAST(dt.domain_value AS INTEGER) = es.service_code
+      AND dt.domain_id = 5 AND dt.language_code = 'E'
+    WHERE v.registration_number = '3946615' AND v.is_active = 1
+    GROUP BY es.service_code, dt.domain_text ORDER BY total_invoice DESC
+
+Vehicle Cost Reports (fact_car_reports):
+  Monthly cost snapshot per vehicle. Join: fact_car_reports.vehicle_id = dim_vehicle.vehicle_id
+  IMPORTANT: The cost breakdown columns (fuel_cost_total, maintenance_cost_total, tyre_cost_total,
+  replacement_car_cost_total) are PER-KM RATES, not AED amounts. Multiply by km_driven to get AED.
+  Only use total_cost (cumulative AED), total_invoiced (cumulative AED), and cost_per_km directly.
+  For per-month cost/invoice breakdowns, prefer fact_exploitation_services instead.
+
+Maintenance Approvals (fact_maintenance_approvals):
+  Individual maintenance events with approval_date, amount (AED), supplier_name, description.
+  Use for detailed maintenance history (what work was done, which supplier, cost per event).
+  Join: fact_maintenance_approvals.vehicle_id = dim_vehicle.vehicle_id""")
 
         # --- Pre-built views ---
         lines.append("\n=== PRE-BUILT VIEWS (prefer these over complex JOINs) ===")
@@ -620,6 +922,7 @@ Maintenance / Service Records (fact_odometer_reading):
 - dim_date (Calendar Dates): Date dimension for time analysis  [grain: One row per date]
 - ref_vehicle_status (Vehicle Statuses): Status code reference  [grain: One row per status code]
 - ref_order_status (Order Statuses): Order status reference  [grain: One row per status code]
+- ref_fuel_code (Fuel Codes): Fuel/energy type reference  [grain: One row per fuel code]
 - fact_odometer_reading (Odometer & Service Records): Mileage readings AND maintenance/service records. source_type = 'Service' for maintenance. transaction_description has repair details.  [grain: One row per reading/service event]
 - fact_billing (Billing Records): Billing transactions  [grain: One row per billing record]
 
@@ -631,6 +934,9 @@ Maintenance / Service Records (fact_odometer_reading):
 - fact_odometer_reading.vehicle_id -> dim_vehicle.vehicle_id (many-to-one)
 - fact_billing.vehicle_id -> dim_vehicle.vehicle_id (many-to-one)
 - fact_billing.customer_id -> dim_customer.customer_id (many-to-one)
+- fact_odometer_reading.reading_date_key -> dim_date.date_key (many-to-one)
+- dim_vehicle.vehicle_status_code -> ref_vehicle_status.status_code (many-to-one)
+- dim_group.customer_id -> dim_customer.customer_id (many-to-one)
 
 === BUSINESS RULES ===
 Vehicle Status Codes (dim_vehicle.vehicle_status_code):
@@ -641,11 +947,29 @@ Vehicle Status Codes (dim_vehicle.vehicle_status_code):
   Active vehicles: is_active = 1 (status IN (0,1))
   Terminated: is_active = 0 (status >= 2)
 
+Fuel Codes (dim_vehicle.fuel_code):
+  1 = Petrol - Unleaded 91 E-Plus, 2 = Petrol - Unleaded 95 Special
+  3 = Diesel, 4 = LPG, 6 = Petrol - Unleaded 98 Super
+  7 = Electric - Full Electric (BEV), 8 = Electric - Plugin Hybrid (PHEV), 9 = Electric - Hybrid (HEV)
+  Petrol: fuel_code IN (1,2,6), Diesel: fuel_code=3, Electric (all): fuel_code IN (7,8,9)
+
 Lease Types: O = Operational, F = Financial, L = Lease
 Primary driver: driver_sequence = 1 or is_primary_driver = 1
 Active contract: is_active = 1 or contract_status = 'Active'
 Dates: TEXT YYYY-MM-DD, use date('now'), date('now', '-12 months')
 Maintenance: fact_odometer_reading with source_type = 'Service'. transaction_description has details. Use LIKE for search.
+Contract Duration & Expiration:
+  IMPORTANT: For expiring/ending questions, ALWAYS use expected_end_date and months_remaining. NEVER use lease_end_date (stale source data).
+  expected_end_date = start + duration months. months_driven = months since start. months_remaining = months to end (negative = overdue).
+  "Vehicles expiring in 3 months": SELECT COUNT(*) FROM dim_vehicle WHERE months_remaining BETWEEN 0 AND 3
+  Vehicle and contract are interchangeable — every vehicle has a contract.
+  dim_vehicle: expected_end_date, months_driven, months_remaining (USE THESE)
+  dim_contract: contract_start_date, contract_end_date, months_driven, months_remaining
+  lease_end_date: Raw source field — DO NOT use for expiration queries
+CRITICAL - Registration vs Contract Expiry:
+  "Vehicle registration expiry" (government license plate renewal) is NOT tracked in this system.
+  "Contract/lease expiry" (expected_end_date, months_remaining) IS available.
+  If user asks about "registration expiring" or "license plate expiry", explain this distinction.
 
 === PRE-BUILT VIEWS (prefer over complex JOINs) ===
 - view_fleet_overview: Vehicles with customer and primary driver info
@@ -657,7 +981,28 @@ Maintenance: fact_odometer_reading with source_type = 'Service'. transaction_des
 - view_mileage_analysis: Odometer readings and mileage by vehicle
 - view_customer_billing_summary: Billing totals by customer
 - view_driver_directory: All drivers with vehicle and customer info
-- view_account_manager_portfolio: Customers and vehicles per account manager"""
+- view_account_manager_portfolio: Customers and vehicles per account manager
+- view_maintenance_analysis: Maintenance events with vehicle and supplier details
+- view_vehicle_cost_analysis: Vehicle cost breakdown from monthly car reports
+- view_supplier_summary: Supplier statistics including total spending and vehicles serviced
+
+Reporting Period: reporting_period is YYYYMM integer (e.g. 202601). Do NOT join to dim_date.
+  Filter: reporting_period >= CAST(strftime('%Y%m', date('now', '-12 months')) AS INTEGER)
+  When filtering by registration_number, always add v.is_active = 1
+
+Monthly Costs/Invoices (fact_exploitation_services):
+  CRITICAL: For ANY question about cost, invoice, or spending per month by service type,
+  ALWAYS use fact_exploitation_services:
+    total_monthly_cost = actual AED cost per month
+    total_monthly_invoice = actual AED invoiced per month
+    service_code: 11=Depreciation, 100=Insurance, 580=Maintenance, 581=Tyres, 600=Fuel, 620=Replacement vehicle, 650=Licensing, 660=Roadside assistance, 700=Fee, 711=Finance admin fee, 999=Interest
+  Join: fact_exploitation_services.vehicle_id = dim_vehicle.vehicle_id
+  Service code descriptions: JOIN ref_domain_translation dt ON CAST(dt.domain_value AS INTEGER) = es.service_code AND dt.domain_id = 5 AND dt.language_code = 'E'
+
+Vehicle Cost Reports (fact_car_reports):
+  Monthly snapshot per vehicle. Only total_cost and total_invoiced are in AED.
+  Cost breakdown columns (maintenance_cost_total etc.) are PER-KM RATES, not AED amounts.
+  For per-month breakdowns, use fact_exploitation_services instead."""
 
     def _build_system_prompt(self, user_context: Dict[str, Any]) -> str:
         """Build system prompt for chat"""
@@ -681,9 +1026,12 @@ Access level: {"Full access" if user_context.get("customer_ids") is None else "L
 Guidelines:
 - Be helpful, professional, and concise
 - When discussing data, offer to show specific numbers
+- All monetary amounts are in UAE Dirhams (AED). Always display currency values with the AED symbol, e.g. AED 121,581.41
 - Suggest relevant follow-up questions
 - If unsure, ask for clarification
-- Never reveal system internals or database structure"""
+- Never reveal system internals or database structure
+- IMPORTANT: Always consider the full conversation context - if the user asks follow-up questions like "show me that as a chart", "break it down by status", or "filter that by Toyota", understand they are referring to the previous query/topic
+- When the user says "it", "that", "those", "the same", etc., refer back to the previous messages to understand what they mean"""
 
     def _detect_chart_config(self, data: list, user_message: str) -> dict | None:
         """Auto-detect appropriate chart type from data shape and query"""
@@ -692,6 +1040,9 @@ Guidelines:
 
         first_row = data[0]
         keys = list(first_row.keys())
+
+        # Patterns for numeric keys that are actually identifiers/dimensions, not measures
+        id_patterns = ['_id', 'period', 'year', 'month', 'week', 'code', 'number']
 
         numeric_keys = []
         categorical_keys = []
@@ -703,7 +1054,12 @@ Guidelines:
                 categorical_keys.append(key)
                 continue
             if isinstance(sample, (int, float)):
-                numeric_keys.append(key)
+                # Check if this numeric key is actually an identifier/dimension
+                key_lower = key.lower()
+                if any(p in key_lower for p in id_patterns):
+                    categorical_keys.append(key)
+                else:
+                    numeric_keys.append(key)
             elif isinstance(sample, str):
                 if any(p in key.lower() for p in ['date', 'month', 'year', 'week', 'period', 'time']):
                     date_keys.append(key)
@@ -720,11 +1076,13 @@ Guidelines:
 
         # Date/time dimension + numeric → line chart
         if date_keys and numeric_keys:
-            return {
-                "chart_type": "line",
-                "x_axis_key": date_keys[0],
-                "y_axis_keys": numeric_keys[:3],
-            }
+            y_keys = [k for k in numeric_keys if k != date_keys[0]][:3]
+            if y_keys:
+                return {
+                    "chart_type": "line",
+                    "x_axis_key": date_keys[0],
+                    "y_axis_keys": y_keys,
+                }
 
         # Few categories (≤8) + single numeric + distribution keywords → pie chart
         if categorical_keys and numeric_keys and row_count <= 8 and len(numeric_keys) == 1:
@@ -738,19 +1096,25 @@ Guidelines:
 
         # Categorical + numeric(s) → bar chart
         if categorical_keys and numeric_keys:
-            return {
-                "chart_type": "bar",
-                "x_axis_key": categorical_keys[0],
-                "y_axis_keys": numeric_keys[:4],
-            }
+            x_key = categorical_keys[0]
+            y_keys = [k for k in numeric_keys if k != x_key][:4]
+            if y_keys:
+                return {
+                    "chart_type": "bar",
+                    "x_axis_key": x_key,
+                    "y_axis_keys": y_keys,
+                }
 
         # Only numerics, multiple rows → line chart
         if numeric_keys and row_count > 2:
-            return {
-                "chart_type": "line",
-                "x_axis_key": keys[0],
-                "y_axis_keys": numeric_keys[:3],
-            }
+            x_key = keys[0]
+            y_keys = [k for k in numeric_keys if k != x_key][:3]
+            if y_keys:
+                return {
+                    "chart_type": "line",
+                    "x_axis_key": x_key,
+                    "y_axis_keys": y_keys,
+                }
 
         return None
 
@@ -759,10 +1123,225 @@ Guidelines:
         data_keywords = [
             "show", "list", "how many", "count", "total",
             "average", "sum", "find", "search", "get",
-            "what is", "which", "report"
+            "what is", "which", "report", "breakdown",
+            "by status", "by make", "by customer", "by type",
+            "per month", "per year", "distribution", "top",
+            "chart", "graph", "visualize", "display"
         ]
         message_lower = message.lower()
         return any(kw in message_lower for kw in data_keywords)
+
+    async def _handle_aggregation_query(self, query_lower: str) -> dict | None:
+        """Handle common aggregation queries directly without AI"""
+
+        # Common patterns: "vehicles by X", "show vehicles by X", "show me vehicles by X", etc.
+        # More flexible patterns to catch various phrasings
+        patterns = [
+            (r'(?:show|get|list|display|give)?\s*(?:me\s+)?(?:the\s+)?(?:all\s+)?vehicles?\s+(?:breakdown\s+)?by\s+(status|make|customer|type|model|fuel)', 'dim_vehicle', 'vehicles'),
+            (r'(?:show|get|list|display|give)?\s*(?:me\s+)?(?:the\s+)?(?:number|count)?\s*(?:of\s+)?vehicles?\s+by\s+(status|make|customer|type|model|fuel)', 'dim_vehicle', 'vehicles'),
+            (r'(?:breakdown|distribution)\s+(?:of\s+)?vehicles?\s+by\s+(status|make|customer|type|model|fuel)', 'dim_vehicle', 'vehicles'),
+            (r'how\s+many\s+vehicles?\s+(?:per|by|for\s+each)\s+(status|make|customer|type|model|fuel)', 'dim_vehicle', 'vehicles'),
+            (r'vehicles?\s+(?:per|by)\s+(status|make|customer|type|model|fuel)', 'dim_vehicle', 'vehicles'),
+            (r'(?:show|get|list|display|give)?\s*(?:me\s+)?(?:the\s+)?contracts?\s+by\s+(status|customer)', 'dim_contract', 'contracts'),
+        ]
+
+        dim_mapping = {
+            'status': 'vehicle_status',
+            'make': 'make_name',
+            'model': 'model_name',
+            'customer': 'customer_name',
+            'type': 'body_type',
+            'fuel': 'fuel_type',
+        }
+
+        for pattern, table, entity in patterns:
+            match = re.search(pattern, query_lower)
+            if match:
+                dimension = match.group(1).lower()
+                col_name = dim_mapping.get(dimension, dimension)
+                count_col = f"{entity}_count"
+
+                sql = f"SELECT {col_name}, COUNT(*) as {count_col} FROM {table} GROUP BY {col_name} ORDER BY {count_col} DESC"
+
+                logger.info(f"Aggregation handler matched pattern for '{dimension}', executing: {sql}")
+
+                try:
+                    result = await self.db.execute(text(sql))
+                    columns = list(result.keys())
+                    results = [dict(zip(columns, row)) for row in result.fetchall()]
+                    if results:
+                        # Build a nice summary message
+                        summary_lines = []
+                        for r in results[:10]:
+                            value = r.get(col_name) or "Unknown"
+                            count = r.get(count_col, 0)
+                            summary_lines.append(f"- **{value}**: {count:,} {entity}")
+
+                        message = f"Here's the breakdown of {entity} by {dimension}:\n\n" + "\n".join(summary_lines)
+                        if len(results) > 10:
+                            message += f"\n\n...and {len(results) - 10} more categories."
+
+                        logger.info(f"Aggregation handler returning {len(results)} results")
+                        return {
+                            "data": results,
+                            "message": message
+                        }
+                except Exception as e:
+                    logger.error(f"Aggregation query failed: {e}")
+                    return None
+
+        return None
+
+    async def _handle_service_cost_query(self, query_lower: str) -> dict | None:
+        """Handle service cost/invoice queries using fact_exploitation_services.
+
+        The AI model often picks wrong tables for these queries, so we intercept
+        and generate correct SQL directly.
+        """
+
+        # Detect service cost/invoice queries
+        service_keywords = ['maintenance', 'tyre', 'tire', 'insurance', 'fuel',
+                            'replacement', 'licensing', 'roadside', 'service',
+                            'cost', 'invoice', 'invoiced', 'spending', 'expense']
+        monthly_keywords = ['month', 'monthly', 'per month', 'last 12', 'last 6',
+                            'this year', 'last year', 'trend', 'history']
+
+        has_service = any(kw in query_lower for kw in service_keywords)
+        has_monthly = any(kw in query_lower for kw in monthly_keywords)
+
+        if not (has_service and has_monthly):
+            return None
+
+        # Extract vehicle identifier (registration number or object number)
+        vehicle_match = re.search(r'(?:vehicle|registration|reg|car|object)[\s#:]*(?:number\s+)?(\d{4,8})', query_lower)
+        if not vehicle_match:
+            # Try standalone number patterns (e.g. "for 3946615")
+            vehicle_match = re.search(r'(?:for|of)\s+(\d{5,8})', query_lower)
+        if not vehicle_match:
+            return None
+
+        vehicle_id_str = vehicle_match.group(1)
+
+        # Determine service code filter
+        service_code_filter = None
+        service_label = "all services"
+        if 'maintenance' in query_lower or 'repair' in query_lower:
+            service_code_filter = 580
+            service_label = "Maintenance and repairs"
+        elif 'tyre' in query_lower or 'tire' in query_lower:
+            service_code_filter = 581
+            service_label = "Tyres"
+        elif 'insurance' in query_lower:
+            service_code_filter = 100
+            service_label = "Comprehensive insurance"
+        elif 'fuel' in query_lower:
+            service_code_filter = 600
+            service_label = "Fuel"
+        elif 'replacement' in query_lower:
+            service_code_filter = 620
+            service_label = "Replacement vehicle"
+        elif 'licensing' in query_lower:
+            service_code_filter = 650
+            service_label = "Licensing"
+        elif 'roadside' in query_lower:
+            service_code_filter = 660
+            service_label = "Roadside assistance"
+
+        # Determine time range (number of months back)
+        months_back = 12  # default
+        m = re.search(r'last\s+(\d+)\s+month', query_lower)
+        if m:
+            months_back = int(m.group(1))
+        elif 'last year' in query_lower:
+            months_back = 12
+        elif 'this year' in query_lower:
+            months_back = 12
+        elif 'last 6' in query_lower:
+            months_back = 6
+        elif 'last 3' in query_lower:
+            months_back = 3
+        elif 'last 24' in query_lower:
+            months_back = 24
+
+        # Build SQL - try registration number first (most common user input)
+        service_filter = f"AND es.service_code = {service_code_filter}" if service_code_filter else ""
+
+        sql = f"""SELECT es.reporting_period,
+       SUM(es.total_monthly_cost) as cost_aed,
+       SUM(es.total_monthly_invoice) as invoice_aed
+FROM fact_exploitation_services es
+JOIN dim_vehicle v ON es.vehicle_id = v.vehicle_id
+WHERE v.registration_number = '{vehicle_id_str}' AND v.is_active = 1
+  {service_filter}
+  AND es.reporting_period >= CAST(strftime('%Y%m', date('now', '-{months_back} months')) AS INTEGER)
+GROUP BY es.reporting_period
+ORDER BY es.reporting_period"""
+
+        logger.info(f"Service cost handler: vehicle={vehicle_id_str}, service={service_label}, months={months_back}")
+        logger.info(f"Service cost handler SQL: {sql}")
+
+        try:
+            result = await self.db.execute(text(sql))
+            columns = list(result.keys())
+            results = [dict(zip(columns, row)) for row in result.fetchall()]
+
+            # If no results with registration_number, try as direct vehicle_id
+            if not results:
+                sql_direct = f"""SELECT es.reporting_period,
+       SUM(es.total_monthly_cost) as cost_aed,
+       SUM(es.total_monthly_invoice) as invoice_aed
+FROM fact_exploitation_services es
+WHERE es.vehicle_id = {vehicle_id_str}
+  {service_filter}
+  AND es.reporting_period >= CAST(strftime('%Y%m', date('now', '-{months_back} months')) AS INTEGER)
+GROUP BY es.reporting_period
+ORDER BY es.reporting_period"""
+                logger.info(f"Service cost handler: retrying with direct vehicle_id")
+                result = await self.db.execute(text(sql_direct))
+                columns = list(result.keys())
+                results = [dict(zip(columns, row)) for row in result.fetchall()]
+
+            if results:
+                # Format period for display
+                for row in results:
+                    period = row.get('reporting_period', 0)
+                    if period:
+                        year = period // 100
+                        month = period % 100
+                        row['month'] = f"{year}{month:02d}"
+
+                # Build summary
+                total_cost = sum(r.get('cost_aed', 0) or 0 for r in results)
+                total_invoice = sum(r.get('invoice_aed', 0) or 0 for r in results)
+
+                summary_lines = []
+                for r in results:
+                    month_str = r.get('month', str(r.get('reporting_period', '')))
+                    cost = r.get('cost_aed', 0) or 0
+                    invoice = r.get('invoice_aed', 0) or 0
+                    summary_lines.append(f"- **{month_str}**: Cost AED {cost:,.2f} | Invoice AED {invoice:,.2f}")
+
+                message = (
+                    f"**{service_label}** for vehicle **{vehicle_id_str}** "
+                    f"(last {months_back} months):\n\n"
+                    + "\n".join(summary_lines)
+                    + f"\n\n**Totals**: Cost AED {total_cost:,.2f} | Invoice AED {total_invoice:,.2f}"
+                )
+
+                logger.info(f"Service cost handler returning {len(results)} months of data")
+                return {
+                    "data": results,
+                    "message": message
+                }
+            else:
+                return {
+                    "data": [],
+                    "message": f"No {service_label.lower()} data found for vehicle {vehicle_id_str} in the last {months_back} months."
+                }
+
+        except Exception as e:
+            logger.error(f"Service cost query failed: {e}")
+            return None
 
     def _validate_sql_safety(self, sql: str) -> bool:
         """Validate SQL query is safe to execute"""
@@ -820,17 +1399,24 @@ Guidelines:
         return sql
 
     async def _get_schema_info(self) -> str:
-        """Get database schema information for SQL generation"""
+        """Get database schema information for SQL generation.
+
+        Only includes semantic-layer tables (dim_*, fact_*, view_*, ref_*, agg_*)
+        to keep the prompt focused and avoid confusion with raw landing/staging tables.
+        """
         if settings.DATABASE_TYPE == "sqlite":
+            # Only show semantic-layer tables/views — not landing_ or staging_ tables
             result = await self.db.execute(
-                text("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+                text("""SELECT name, type FROM sqlite_master
+                        WHERE (type='table' OR type='view')
+                          AND (name LIKE 'dim_%' OR name LIKE 'fact_%' OR name LIKE 'view_%'
+                               OR name LIKE 'ref_%' OR name LIKE 'agg_%' OR name LIKE 'semantic_%')
+                        ORDER BY name""")
             )
             tables = result.fetchall()
 
             info_lines = []
-            for (table_name,) in tables:
-                if table_name.startswith('sqlite_'):
-                    continue
+            for table_name, _ in tables:
                 col_result = await self.db.execute(text(f"PRAGMA table_info('{table_name}')"))
                 columns = col_result.fetchall()
                 col_names = ", ".join(col[1] for col in columns)

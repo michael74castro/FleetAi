@@ -12,6 +12,9 @@ export function detectChartConfig(
   const firstRow = data[0];
   const keys = Object.keys(firstRow);
 
+  const idPatterns = ['_id', 'period', 'year', 'month', 'week', 'code', 'number'];
+  const isIdKey = (k: string) => idPatterns.some(p => k.toLowerCase().includes(p));
+
   const numericKeys: string[] = [];
   const categoricalKeys: string[] = [];
   const dateKeys: string[] = [];
@@ -23,7 +26,11 @@ export function detectChartConfig(
       continue;
     }
     if (typeof sample === 'number') {
-      numericKeys.push(key);
+      if (isIdKey(key)) {
+        categoricalKeys.push(key);
+      } else {
+        numericKeys.push(key);
+      }
     } else if (typeof sample === 'string') {
       const lcKey = key.toLowerCase();
       if (['date', 'month', 'year', 'week', 'period', 'time'].some(p => lcKey.includes(p))) {
@@ -43,11 +50,14 @@ export function detectChartConfig(
 
   // Date dimension + numerics → line chart
   if (dateKeys.length > 0 && numericKeys.length > 0) {
-    return {
-      chart_type: 'line',
-      x_axis_key: dateKeys[0],
-      y_axis_keys: numericKeys.slice(0, 3),
-    };
+    const yKeys = numericKeys.filter(k => k !== dateKeys[0]).slice(0, 3);
+    if (yKeys.length > 0) {
+      return {
+        chart_type: 'line',
+        x_axis_key: dateKeys[0],
+        y_axis_keys: yKeys,
+      };
+    }
   }
 
   // Few categories + 1 numeric → pie chart
@@ -61,20 +71,28 @@ export function detectChartConfig(
 
   // Categorical + numerics → bar chart
   if (categoricalKeys.length > 0 && numericKeys.length > 0) {
-    return {
-      chart_type: 'bar',
-      x_axis_key: categoricalKeys[0],
-      y_axis_keys: numericKeys.slice(0, 4),
-    };
+    const xKey = categoricalKeys[0];
+    const yKeys = numericKeys.filter(k => k !== xKey).slice(0, 4);
+    if (yKeys.length > 0) {
+      return {
+        chart_type: 'bar',
+        x_axis_key: xKey,
+        y_axis_keys: yKeys,
+      };
+    }
   }
 
   // Numerics only, multiple rows → line chart
   if (numericKeys.length > 0 && data.length > 2) {
-    return {
-      chart_type: 'line',
-      x_axis_key: keys[0],
-      y_axis_keys: numericKeys.slice(0, 3),
-    };
+    const xKey = keys[0];
+    const yKeys = numericKeys.filter(k => k !== xKey).slice(0, 3);
+    if (yKeys.length > 0) {
+      return {
+        chart_type: 'line',
+        x_axis_key: xKey,
+        y_axis_keys: yKeys,
+      };
+    }
   }
 
   return null;
