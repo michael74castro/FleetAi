@@ -144,6 +144,9 @@ CREATE TABLE staging.vehicles (
     acquisition_date DATE,
     acquisition_cost DECIMAL(15,2),
     residual_value DECIMAL(15,2),
+    expected_end_date DATE,
+    months_driven INT,
+    months_remaining INT,
     status VARCHAR(20),
     last_update DATETIME2,
 
@@ -204,6 +207,8 @@ CREATE TABLE staging.contracts (
     start_date DATE,
     end_date DATE,
     term_months INT,
+    months_driven INT,
+    months_remaining INT,
     monthly_rate DECIMAL(15,2),
     mileage_allowance INT,
     excess_mileage_rate DECIMAL(10,4),
@@ -520,6 +525,48 @@ CREATE TABLE staging.group_members (
 );
 
 -- =============================================
+-- Damage Domain
+-- =============================================
+
+CREATE TABLE staging.damages (
+    damage_id VARCHAR(15) PRIMARY KEY,          -- DADANO
+    object_number INT NOT NULL,                 -- DAOBNO
+    driver_number INT,                          -- DADADR
+    damage_date DATE,                           -- parsed from DADACC/YY/MM/DD
+    description VARCHAR(1000),                  -- concatenated DADADS+DAD2+DAD3+DAD4+DAD5
+    damage_amount DECIMAL(15,2),                -- DADAAM
+    amount_recovered DECIMAL(15,2),             -- DADAAR (Accident Area Code reused as amount in staging)
+    accident_location_address VARCHAR(30),      -- DADAAD
+    accident_country_code VARCHAR(3),           -- DADALA
+    mileage INT,                                -- DADAMI
+    damage_type VARCHAR(3),                     -- DADATY
+    fault_code VARCHAR(3),                      -- DADAFF
+    damage_status_code VARCHAR(1),              -- DADASC
+    damage_recourse VARCHAR(3),                 -- DASTCD
+    total_loss_code VARCHAR(3),                 -- DATOCD
+    country_code VARCHAR(3),                    -- DACOUC
+    reporting_period INT,                       -- DARPPD
+    insurance_co_number BIGINT,                 -- DAINCN
+    third_party_name VARCHAR(35),               -- DATPNM
+    repair_days INT,                            -- DAREPD
+    amount_own_risk DECIMAL(15,2),              -- DADAMO
+    amount_refunded DECIMAL(15,2),              -- DADAMR
+    claimed_deductible_repair DECIMAL(15,2),    -- DADARP
+    refunded_deductible_repair DECIMAL(15,2),   -- DARERP
+    salvage_amount DECIMAL(15,2),               -- DASALD
+    damage_fault_level VARCHAR(3),              -- DADAFL
+    garage_name VARCHAR(35),                    -- DARSGA
+    source_hash VARBINARY(32),
+    last_update DATETIME2,
+
+    FOREIGN KEY (object_number) REFERENCES staging.vehicles(equipment_id)
+);
+
+CREATE INDEX IX_staging_damages_object ON staging.damages(object_number);
+CREATE INDEX IX_staging_damages_driver ON staging.damages(driver_number);
+CREATE INDEX IX_staging_damages_date ON staging.damages(damage_date);
+
+-- =============================================
 -- CDC Tracking Tables
 -- =============================================
 
@@ -536,5 +583,325 @@ CREATE TABLE staging.cdc_tracking (
 );
 
 CREATE INDEX IX_staging_cdc_table ON staging.cdc_tracking(table_name, processed_at);
+
+-- =============================================
+-- Domain Translations (Reference)
+-- =============================================
+
+CREATE TABLE staging.domain_translations (
+    translation_key INT IDENTITY(1,1) PRIMARY KEY,
+    country_code VARCHAR(10),
+    domain_id INT,
+    domain_value VARCHAR(50),
+    language_code VARCHAR(10),
+    domain_text VARCHAR(200),
+
+    source_hash VARBINARY(32),
+
+    CONSTRAINT UQ_staging_dt UNIQUE (country_code, domain_id, domain_value, language_code)
+);
+
+CREATE INDEX IX_staging_dt_domain ON staging.domain_translations(domain_id);
+
+-- =============================================
+-- Exploitation Services (Transactional)
+-- =============================================
+
+CREATE TABLE staging.exploitation_services (
+    service_key INT IDENTITY(1,1) PRIMARY KEY,
+    customer_no INT,
+    contract_position_no INT,
+    object_no INT,
+    service_sequence INT,
+    service_code INT,
+    service_cost_total DECIMAL(15,2),
+    service_invoice DECIMAL(15,2),
+    invoice_supplier DECIMAL(15,2),
+    total_monthly_cost DECIMAL(15,2),
+    total_monthly_invoice DECIMAL(15,2),
+    lp_code VARCHAR(10),
+    reporting_period INT,
+    country_code VARCHAR(10),
+    volume_code VARCHAR(10),
+    distance_code VARCHAR(10),
+    consumption_code VARCHAR(10),
+    currency_code VARCHAR(10),
+
+    source_hash VARBINARY(32)
+);
+
+CREATE INDEX IX_staging_es_object ON staging.exploitation_services(object_no);
+CREATE INDEX IX_staging_es_customer ON staging.exploitation_services(customer_no);
+
+-- =============================================
+-- Maintenance Approvals (Transactional)
+-- =============================================
+
+CREATE TABLE staging.maintenance_approvals (
+    approval_key INT IDENTITY(1,1) PRIMARY KEY,
+    object_no INT NOT NULL,
+    sequence INT,
+    approval_date DATE,
+    mileage_km DECIMAL(15,2),
+    amount DECIMAL(15,2),
+    description VARCHAR(200),
+    description_2 VARCHAR(200),
+    description_3 VARCHAR(200),
+    source_code VARCHAR(10),
+    maintenance_type INT,
+    supplier_no INT,
+    supplier_branch VARCHAR(50),
+    major_code VARCHAR(10),
+    minor_code VARCHAR(10),
+    reporting_period INT,
+    country_code VARCHAR(10),
+    volume_code VARCHAR(10),
+    distance_code VARCHAR(10),
+    consumption_code VARCHAR(10),
+    currency_code VARCHAR(10),
+    si_run_no INT,
+    date_from DATE,
+
+    source_hash VARBINARY(32)
+);
+
+CREATE INDEX IX_staging_ma_object ON staging.maintenance_approvals(object_no);
+CREATE INDEX IX_staging_ma_supplier ON staging.maintenance_approvals(supplier_no);
+CREATE INDEX IX_staging_ma_date ON staging.maintenance_approvals(approval_date);
+
+-- =============================================
+-- Passed On Invoices (Financial)
+-- =============================================
+
+CREATE TABLE staging.passed_invoices (
+    invoice_key INT IDENTITY(1,1) PRIMARY KEY,
+    contract_no INT,
+    customer_no INT,
+    name_code VARCHAR(50),
+    object_no INT,
+    contract_position_no INT,
+    amount DECIMAL(15,2),
+    cost_code DECIMAL(15,2),
+    eb_reporting_period DECIMAL(15,2),
+    driver_no DECIMAL(15,2),
+    description VARCHAR(200),
+    gross_net VARCHAR(10),
+    invoice_no DECIMAL(15,2),
+    lp_code VARCHAR(10),
+    object_bridge DECIMAL(15,2),
+    origin_code VARCHAR(10),
+    run_no DECIMAL(15,2),
+    source_code VARCHAR(10),
+    vat_type VARCHAR(10),
+    reporting_period INT,
+    country_code VARCHAR(10),
+
+    source_hash VARBINARY(32)
+);
+
+CREATE INDEX IX_staging_pi_object ON staging.passed_invoices(object_no);
+CREATE INDEX IX_staging_pi_customer ON staging.passed_invoices(customer_no);
+
+-- =============================================
+-- Replacement Cars (Transactional)
+-- =============================================
+
+CREATE TABLE staging.replacement_cars (
+    rc_key INT IDENTITY(1,1) PRIMARY KEY,
+    object_no INT NOT NULL,
+    rc_no INT,
+    sequence VARCHAR(10),
+    driver_no DECIMAL(15,2),
+    rc_run_no DECIMAL(15,2),
+    begin_date DATE,
+    end_date DATE,
+    rc_code VARCHAR(10),
+    km DECIMAL(15,2),
+    amount DECIMAL(15,2),
+    reason VARCHAR(200),
+    description VARCHAR(200),
+    description_2 VARCHAR(200),
+    description_3 VARCHAR(200),
+    type VARCHAR(10),
+    driver_name VARCHAR(100),
+    source_code VARCHAR(10),
+    reporting_period INT,
+    country_code VARCHAR(10),
+
+    source_hash VARBINARY(32)
+);
+
+CREATE INDEX IX_staging_rc_object ON staging.replacement_cars(object_no);
+CREATE INDEX IX_staging_rc_dates ON staging.replacement_cars(begin_date, end_date);
+
+-- =============================================
+-- Reporting Periods (Reference)
+-- =============================================
+
+CREATE TABLE staging.reporting_periods (
+    period_key INT IDENTITY(1,1) PRIMARY KEY,
+    period_cc DECIMAL(15,2),
+    period_yy DECIMAL(15,2),
+    period_mm DECIMAL(15,2),
+    period_dd DECIMAL(15,2),
+    reporting_period DECIMAL(15,2),
+    month_period DECIMAL(15,2),
+    reporting_date DATE,
+
+    source_hash VARBINARY(32)
+);
+
+-- =============================================
+-- Suppliers (Reference/Master)
+-- =============================================
+
+CREATE TABLE staging.suppliers (
+    supplier_key INT IDENTITY(1,1) PRIMARY KEY,
+    supplier_no INT,
+    branch_no VARCHAR(50),
+    supplier_name VARCHAR(200),
+    name_line_2 VARCHAR(200),
+    name_line_3 VARCHAR(200),
+    class VARCHAR(10),
+    country_code VARCHAR(10),
+    address VARCHAR(200),
+    city VARCHAR(100),
+    category VARCHAR(50),
+    phone VARCHAR(50),
+    fax VARCHAR(50),
+    email VARCHAR(100),
+    contact_person VARCHAR(100),
+    responsible_person VARCHAR(100),
+    reporting_period DECIMAL(15,2),
+    country VARCHAR(10),
+
+    source_hash VARBINARY(32),
+
+    CONSTRAINT UQ_staging_suppliers UNIQUE (supplier_no, branch_no)
+);
+
+CREATE INDEX IX_staging_su_name ON staging.suppliers(supplier_name);
+
+-- =============================================
+-- Car Reports (Monthly Vehicle Snapshot)
+-- =============================================
+
+CREATE TABLE staging.car_reports (
+    report_key INT IDENTITY(1,1) PRIMARY KEY,
+    object_no INT NOT NULL,
+    reporting_period INT,
+    -- Book values
+    book_value_begin_amount DECIMAL(15,2),
+    book_value_begin_lt DECIMAL(15,2),
+    disinvestment_amount DECIMAL(15,2),
+    disinvestment_lt DECIMAL(15,2),
+    gain_amount DECIMAL(15,2),
+    gain_lt DECIMAL(15,2),
+    -- First start
+    first_start_book_value DECIMAL(15,2),
+    first_start_interest_rate DECIMAL(15,2),
+    -- Cost totals
+    fuel_cost_total DECIMAL(15,2),
+    maintenance_cost_total DECIMAL(15,2),
+    replacement_car_cost_total DECIMAL(15,2),
+    tyre_cost_total DECIMAL(15,2),
+    -- Invoice totals
+    fuel_invoice_total DECIMAL(15,2),
+    maintenance_invoice_total DECIMAL(15,2),
+    replacement_car_invoice_total DECIMAL(15,2),
+    tyre_invoice_total DECIMAL(15,2),
+    -- Mileage
+    first_start_km INT,
+    odometer_date DATE,
+    first_start_initial_km INT,
+    km_driven DECIMAL(15,2),
+    monthly_km_driven DECIMAL(15,2),
+    km_technical DECIMAL(15,2),
+    -- Fuel analysis
+    fuel_cost_per_km DECIMAL(15,4),
+    fuel_invoice_per_km DECIMAL(15,4),
+    fuel_consumption DECIMAL(15,4),
+    fuel_slope DECIMAL(15,2),
+    fuel_monthly_deviation DECIMAL(15,2),
+    -- Maintenance analysis
+    maintenance_cost_per_km DECIMAL(15,4),
+    maintenance_invoice_per_km DECIMAL(15,4),
+    maintenance_slope DECIMAL(15,2),
+    maintenance_monthly_deviation DECIMAL(15,2),
+    -- Replacement car analysis
+    replacement_car_cost_per_km DECIMAL(15,4),
+    replacement_car_invoice_per_km DECIMAL(15,4),
+    replacement_car_slope DECIMAL(15,2),
+    replacement_car_monthly_deviation DECIMAL(15,2),
+    replacement_car_km DECIMAL(15,2),
+    replacement_car_amount DECIMAL(15,2),
+    -- Tyre analysis
+    tyre_cost_per_km DECIMAL(15,4),
+    tyre_invoice_per_km DECIMAL(15,4),
+    tyre_slope DECIMAL(15,2),
+    tyre_monthly_deviation DECIMAL(15,2),
+    -- Running totals
+    total_cost DECIMAL(15,2),
+    total_invoiced DECIMAL(15,2),
+    cost_per_km DECIMAL(15,4),
+    total_surplus DECIMAL(15,2),
+    total_surplus_absolute DECIMAL(15,2),
+    total_total DECIMAL(15,2),
+    -- Contract KM
+    last_week_km DECIMAL(15,2),
+    update_km DECIMAL(15,2),
+    -- Event counts
+    maintenance_count INT,
+    fuel_count INT,
+    replacement_car_count INT,
+    tyre_count INT,
+    tyre_new_count INT,
+    tyre_winter_count INT,
+    -- Private km & damage
+    private_km_pct DECIMAL(15,2),
+    damage_count INT,
+    damage_reserve DECIMAL(15,2),
+    -- Segments
+    segment_01 DECIMAL(15,2), segment_02 DECIMAL(15,2), segment_03 DECIMAL(15,2),
+    segment_04 DECIMAL(15,2), segment_05 DECIMAL(15,2), segment_06 DECIMAL(15,2),
+    segment_07 DECIMAL(15,2), segment_08 DECIMAL(15,2), segment_09 DECIMAL(15,2),
+    segment_10 DECIMAL(15,2), segment_11 DECIMAL(15,2), segment_12 DECIMAL(15,2),
+    segment_13 DECIMAL(15,2), segment_14 DECIMAL(15,2), segment_15 DECIMAL(15,2),
+    -- Metadata
+    country_code VARCHAR(10),
+    volume_code VARCHAR(10),
+    distance_code VARCHAR(10),
+    consumption_code VARCHAR(10),
+    currency_code VARCHAR(10),
+    -- Miscellaneous
+    misc_insurance_amount DECIMAL(15,2),
+    misc_insurance_peryear DECIMAL(15,2),
+    misc_insurance_run_no DECIMAL(15,2),
+    misc_ts_amount DECIMAL(15,2),
+    misc_ts_peryear DECIMAL(15,2),
+    misc_ts_run_no DECIMAL(15,2),
+    traffic_fines_no INT,
+    -- Parking
+    parking_cost_total DECIMAL(15,2),
+    parking_invoice_total DECIMAL(15,2),
+    parking_monthly_deviation DECIMAL(15,2),
+    parking_slope DECIMAL(15,2),
+    -- Unspecified
+    unspecified_cost_total DECIMAL(15,2),
+    unspecified_invoice_total DECIMAL(15,2),
+    unspecified_monthly_deviation DECIMAL(15,2),
+    unspecified_slope DECIMAL(15,2),
+    -- Warranty
+    warranty_cost_total DECIMAL(15,2),
+    warranty_invoice_total DECIMAL(15,2),
+    warranty_monthly_deviation DECIMAL(15,2),
+    warranty_slope DECIMAL(15,2),
+
+    source_hash VARBINARY(32)
+);
+
+CREATE INDEX IX_staging_cr_object ON staging.car_reports(object_no);
+CREATE INDEX IX_staging_cr_period ON staging.car_reports(reporting_period);
+CREATE INDEX IX_staging_cr_object_period ON staging.car_reports(object_no, reporting_period);
 
 GO

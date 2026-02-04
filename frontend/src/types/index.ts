@@ -197,6 +197,8 @@ export interface MessageMetadata {
   tokens?: number;
   sql?: string;
   error?: string;
+  data?: Record<string, unknown>[];
+  chart_config?: ChartConfig;
 }
 
 export interface ChartConfig {

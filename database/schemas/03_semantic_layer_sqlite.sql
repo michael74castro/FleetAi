@@ -153,6 +153,27 @@ INSERT OR REPLACE INTO ref_fuel_code (fuel_code, fuel_type, fuel_subtype, fuel_c
 (8, 'Electric', 'Plugin Hybrid Electric Vehicle (PHEV)', 'Electric', 1, 7),
 (9, 'Electric', 'Hybrid Electric Vehicle (HEV)', 'Electric', 1, 8);
 
+-- Domain Translation Reference Table
+CREATE TABLE IF NOT EXISTS ref_domain_translation (
+    translation_key INTEGER PRIMARY KEY AUTOINCREMENT,
+    country_code TEXT,
+    domain_id INTEGER,
+    domain_value TEXT,
+    language_code TEXT,
+    domain_text TEXT,
+    UNIQUE(country_code, domain_id, domain_value, language_code)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ref_dt_domain ON ref_domain_translation(domain_id);
+
+-- Reporting Period Reference Table
+CREATE TABLE IF NOT EXISTS ref_reporting_period (
+    period_key INTEGER PRIMARY KEY AUTOINCREMENT,
+    reporting_period REAL,
+    month_period REAL,
+    reporting_date TEXT
+);
+
 -- Customer Dimension (denormalized, AI-friendly)
 CREATE TABLE IF NOT EXISTS dim_customer (
     customer_key INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -321,6 +342,33 @@ CREATE TABLE IF NOT EXISTS dim_make_model (
 
 CREATE INDEX IF NOT EXISTS idx_dim_make_model_make ON dim_make_model(make_name);
 
+-- Supplier Dimension
+CREATE TABLE IF NOT EXISTS dim_supplier (
+    supplier_key INTEGER PRIMARY KEY AUTOINCREMENT,
+    supplier_no INTEGER NOT NULL,
+    branch_no TEXT,
+    supplier_name TEXT,
+    name_line_2 TEXT,
+    name_line_3 TEXT,
+    full_name TEXT,
+    class TEXT,
+    country_code TEXT,
+    address TEXT,
+    city TEXT,
+    category TEXT,
+    phone TEXT,
+    fax TEXT,
+    email TEXT,
+    contact_person TEXT,
+    responsible_person TEXT,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(supplier_no, branch_no)
+);
+
+CREATE INDEX IF NOT EXISTS idx_dim_supplier_name ON dim_supplier(supplier_name);
+CREATE INDEX IF NOT EXISTS idx_dim_supplier_no ON dim_supplier(supplier_no);
+
 -- =============================================
 -- FACT TABLES
 -- =============================================
@@ -404,6 +452,128 @@ CREATE TABLE IF NOT EXISTS fact_damages (
 CREATE INDEX IF NOT EXISTS idx_fact_damages_vehicle ON fact_damages(vehicle_id);
 CREATE INDEX IF NOT EXISTS idx_fact_damages_date ON fact_damages(damage_date);
 CREATE INDEX IF NOT EXISTS idx_fact_damages_type ON fact_damages(damage_type);
+
+-- Maintenance Approval Facts
+CREATE TABLE IF NOT EXISTS fact_maintenance_approvals (
+    approval_key INTEGER PRIMARY KEY AUTOINCREMENT,
+    vehicle_id INTEGER,
+    supplier_no INTEGER,
+    supplier_name TEXT,
+    approval_date TEXT,
+    mileage_km REAL,
+    amount REAL,
+    description TEXT,
+    maintenance_type INTEGER,
+    major_code TEXT,
+    minor_code TEXT,
+    source_code TEXT,
+    reporting_period INTEGER,
+    country_code TEXT,
+    FOREIGN KEY (vehicle_id) REFERENCES dim_vehicle(vehicle_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fact_ma_vehicle ON fact_maintenance_approvals(vehicle_id);
+CREATE INDEX IF NOT EXISTS idx_fact_ma_supplier ON fact_maintenance_approvals(supplier_no);
+CREATE INDEX IF NOT EXISTS idx_fact_ma_date ON fact_maintenance_approvals(approval_date);
+
+-- Exploitation Services Facts
+CREATE TABLE IF NOT EXISTS fact_exploitation_services (
+    service_key INTEGER PRIMARY KEY AUTOINCREMENT,
+    vehicle_id INTEGER,
+    customer_no INTEGER,
+    service_sequence INTEGER,
+    service_code INTEGER,
+    service_cost_total REAL,
+    service_invoice REAL,
+    total_monthly_cost REAL,
+    total_monthly_invoice REAL,
+    reporting_period INTEGER,
+    country_code TEXT,
+    currency_code TEXT,
+    FOREIGN KEY (vehicle_id) REFERENCES dim_vehicle(vehicle_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fact_es_vehicle ON fact_exploitation_services(vehicle_id);
+CREATE INDEX IF NOT EXISTS idx_fact_es_customer ON fact_exploitation_services(customer_no);
+
+-- Passed Invoice Facts
+CREATE TABLE IF NOT EXISTS fact_passed_invoices (
+    invoice_key INTEGER PRIMARY KEY AUTOINCREMENT,
+    vehicle_id INTEGER,
+    customer_no INTEGER,
+    contract_no INTEGER,
+    amount REAL,
+    cost_code REAL,
+    description TEXT,
+    gross_net TEXT,
+    invoice_no REAL,
+    origin_code TEXT,
+    source_code TEXT,
+    vat_type TEXT,
+    reporting_period INTEGER,
+    country_code TEXT,
+    FOREIGN KEY (vehicle_id) REFERENCES dim_vehicle(vehicle_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fact_pi_vehicle ON fact_passed_invoices(vehicle_id);
+CREATE INDEX IF NOT EXISTS idx_fact_pi_customer ON fact_passed_invoices(customer_no);
+
+-- Replacement Car Facts
+CREATE TABLE IF NOT EXISTS fact_replacement_cars (
+    rc_key INTEGER PRIMARY KEY AUTOINCREMENT,
+    vehicle_id INTEGER,
+    rc_no INTEGER,
+    driver_name TEXT,
+    begin_date TEXT,
+    end_date TEXT,
+    rc_code TEXT,
+    km REAL,
+    amount REAL,
+    reason TEXT,
+    description TEXT,
+    rc_type TEXT,
+    reporting_period INTEGER,
+    country_code TEXT,
+    FOREIGN KEY (vehicle_id) REFERENCES dim_vehicle(vehicle_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fact_rc_vehicle ON fact_replacement_cars(vehicle_id);
+CREATE INDEX IF NOT EXISTS idx_fact_rc_dates ON fact_replacement_cars(begin_date, end_date);
+
+-- Car Reports Facts (Monthly Vehicle Snapshot)
+CREATE TABLE IF NOT EXISTS fact_car_reports (
+    report_key INTEGER PRIMARY KEY AUTOINCREMENT,
+    vehicle_id INTEGER,
+    reporting_period INTEGER,
+    fuel_cost_total REAL,
+    maintenance_cost_total REAL,
+    replacement_car_cost_total REAL,
+    tyre_cost_total REAL,
+    fuel_invoice_total REAL,
+    maintenance_invoice_total REAL,
+    replacement_car_invoice_total REAL,
+    tyre_invoice_total REAL,
+    total_cost REAL,
+    total_invoiced REAL,
+    km_driven REAL,
+    monthly_km_driven REAL,
+    cost_per_km REAL,
+    fuel_consumption REAL,
+    fuel_cost_per_km REAL,
+    maintenance_cost_per_km REAL,
+    maintenance_count INTEGER,
+    fuel_count INTEGER,
+    replacement_car_count INTEGER,
+    tyre_count INTEGER,
+    damage_count INTEGER,
+    total_surplus REAL,
+    country_code TEXT,
+    currency_code TEXT,
+    FOREIGN KEY (vehicle_id) REFERENCES dim_vehicle(vehicle_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fact_cr_vehicle ON fact_car_reports(vehicle_id);
+CREATE INDEX IF NOT EXISTS idx_fact_cr_period ON fact_car_reports(reporting_period);
 
 -- =============================================
 -- PRE-BUILT ANALYTICAL VIEWS (AI-Optimized)
@@ -604,6 +774,67 @@ LEFT JOIN dim_vehicle v ON c.customer_id = v.customer_id
 WHERE c.account_manager_name IS NOT NULL
 GROUP BY c.account_manager_name
 ORDER BY total_monthly_revenue DESC;
+
+-- Maintenance Analysis (answers: "Maintenance costs", "Which suppliers do we use")
+CREATE VIEW IF NOT EXISTS view_maintenance_analysis AS
+SELECT
+    ma.vehicle_id,
+    v.registration_number,
+    v.make_and_model,
+    v.customer_name,
+    ma.approval_date,
+    ma.mileage_km,
+    ma.amount,
+    ma.description,
+    ma.maintenance_type,
+    ma.major_code,
+    ma.minor_code,
+    ma.supplier_no,
+    ma.supplier_name,
+    ma.reporting_period
+FROM fact_maintenance_approvals ma
+LEFT JOIN dim_vehicle v ON ma.vehicle_id = v.vehicle_id;
+
+-- Vehicle Cost Analysis from Car Reports (answers: "Total cost of ownership", "Vehicle running costs")
+CREATE VIEW IF NOT EXISTS view_vehicle_cost_analysis AS
+SELECT
+    cr.vehicle_id,
+    v.registration_number,
+    v.make_and_model,
+    v.customer_name,
+    cr.reporting_period,
+    cr.fuel_cost_total,
+    cr.maintenance_cost_total,
+    cr.replacement_car_cost_total,
+    cr.tyre_cost_total,
+    cr.total_cost,
+    cr.total_invoiced,
+    cr.km_driven,
+    cr.cost_per_km,
+    cr.fuel_consumption,
+    cr.maintenance_count,
+    cr.fuel_count,
+    cr.damage_count,
+    cr.total_surplus
+FROM fact_car_reports cr
+LEFT JOIN dim_vehicle v ON cr.vehicle_id = v.vehicle_id;
+
+-- Supplier Summary (answers: "Supplier spending", "Top suppliers")
+CREATE VIEW IF NOT EXISTS view_supplier_summary AS
+SELECT
+    s.supplier_no,
+    s.supplier_name,
+    s.city,
+    s.country_code,
+    s.category,
+    s.contact_person,
+    COUNT(ma.approval_key) AS total_maintenance_events,
+    SUM(ma.amount) AS total_maintenance_spending,
+    AVG(ma.amount) AS average_event_cost,
+    COUNT(DISTINCT ma.vehicle_id) AS vehicles_serviced
+FROM dim_supplier s
+LEFT JOIN fact_maintenance_approvals ma ON s.supplier_no = ma.supplier_no
+GROUP BY s.supplier_no, s.supplier_name, s.city, s.country_code, s.category, s.contact_person;
 
 -- =============================================
 -- AGGREGATE TABLES FOR QUICK INSIGHTS

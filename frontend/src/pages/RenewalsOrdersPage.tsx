@@ -26,29 +26,48 @@ interface RenewalsKPIs {
   last_monthly_closure: string;
 }
 
-interface RenewalOrder {
-  id: number;
-  registration_number: string;
-  driver_name: string;
-  status: string;
-  object_no: number;
-  model: string;
-  make: string;
-  vehicle_type: string;
-  order_status: string;
-  is_renewal: boolean;
-  is_new: boolean;
-  due_date: string;
+interface FilterOptions {
+  makes: string[];
+  customers: { id: number; name: string }[];
+  order_statuses: { code: number; label: string }[];
+  renewal_statuses: { value: string; label: string }[];
 }
+
+interface RenewalItem {
+  id?: number;
+  vehicle_id?: number;
+  object_no?: number;
+  registration_number?: string;
+  driver_name?: string;
+  renewal_status?: string;
+  make_name?: string;
+  model_name?: string;
+  make_and_model?: string;
+  customer_name?: string;
+  days_to_contract_end?: number;
+  expected_end_date?: string;
+  order_no?: number;
+  order_status?: string;
+  order_date?: string;
+  is_renewal?: number;
+  is_new?: number;
+}
+
+type FilterType = 'overdue_with_order' | 'overdue_no_order' | 'due_no_order' | 'renewal_orders' | 'new_orders' | 'all';
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
 export default function RenewalsOrdersPage() {
   // State
   const [kpis, setKpis] = useState<RenewalsKPIs | null>(null);
-  const [orders, setOrders] = useState<RenewalOrder[]>([]);
+  const [items, setItems] = useState<RenewalItem[]>([]);
+  const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null);
   const [loading, setLoading] = useState(true);
   const [tableLoading, setTableLoading] = useState(false);
+
+  // Filter type for API
+  const [filterType, setFilterType] = useState<FilterType>('all');
+  const [activeKpiTile, setActiveKpiTile] = useState<string | null>(null);
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -84,9 +103,11 @@ export default function RenewalsOrdersPage() {
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
     'registration_number',
     'driver_name',
-    'status',
+    'renewal_status',
     'object_no',
-    'model'
+    'make_and_model',
+    'days_to_contract_end',
+    'order_status'
   ]);
 
   // Sort
@@ -97,72 +118,83 @@ export default function RenewalsOrdersPage() {
   const allColumns = [
     { key: 'registration_number', label: 'License Plate' },
     { key: 'driver_name', label: 'Driver' },
-    { key: 'status', label: 'Status' },
+    { key: 'renewal_status', label: 'Status' },
     { key: 'object_no', label: 'ObjectNo' },
-    { key: 'model', label: 'Model' },
-    { key: 'make', label: 'Make' },
-    { key: 'vehicle_type', label: 'Vehicle Type' },
+    { key: 'make_and_model', label: 'Make & Model' },
+    { key: 'customer_name', label: 'Customer' },
+    { key: 'days_to_contract_end', label: 'Days to End' },
+    { key: 'expected_end_date', label: 'End Date' },
     { key: 'order_status', label: 'Order Status' },
-    { key: 'due_date', label: 'Due Date' }
+    { key: 'order_no', label: 'Order No' }
   ];
 
-  // Fetch KPIs
+  // Fetch KPIs and filter options
   useEffect(() => {
-    const fetchKPIs = async () => {
+    const fetchInitialData = async () => {
       try {
-        const data = await api.getOperationsKPIs();
-        setKpis(data);
+        const [kpisData, filtersData] = await Promise.all([
+          api.getRenewalsKPIs(),
+          api.getRenewalsFilterOptions()
+        ]);
+        setKpis(kpisData);
+        setFilterOptions(filtersData);
       } catch (error) {
+        console.error('Error fetching initial data:', error);
         // Use fallback data
         setKpis({
-          overdue_renewals_with_order: 10,
-          overdue_renewals_no_order: 780,
-          renewals_due_without_order: 926,
-          renewal_orders: 4,
-          new_orders: 64,
-          last_data_update: '2026-01-23T04:33:32Z',
+          overdue_renewals_with_order: 0,
+          overdue_renewals_no_order: 0,
+          renewals_due_without_order: 0,
+          renewal_orders: 0,
+          new_orders: 0,
+          last_data_update: new Date().toISOString(),
           last_monthly_closure: 'December 2025'
         });
       } finally {
         setLoading(false);
       }
     };
-    fetchKPIs();
+    fetchInitialData();
   }, []);
 
-  // Fetch orders
+  // Fetch list data
   useEffect(() => {
-    const fetchOrders = async () => {
+    const fetchList = async () => {
       setTableLoading(true);
       try {
-        // TODO: Replace with actual API call
-        // const data = await api.getRenewalsOrders({ page, page_size: pageSize, ... });
-        throw new Error('API not implemented');
+        const data = await api.getRenewalsList({
+          page,
+          page_size: pageSize,
+          filter_type: filterType,
+          search: driverSearch || licensePlateSearch || undefined,
+          sort_by: sortBy,
+          sort_order: sortOrder,
+          // Advanced filters
+          make: makeFilter || undefined,
+          renewal_status: statusFilter || undefined,
+          order_status_code: orderStatus ? parseInt(orderStatus, 10) : undefined,
+        });
+        setItems(data.items || []);
+        setTotalItems(data.total || 0);
+        setTotalPages(data.total_pages || 1);
       } catch (error) {
-        // Use fallback mock data
-        const mockOrders: RenewalOrder[] = Array.from({ length: pageSize }, (_, i) => ({
-          id: i + 1 + (page - 1) * pageSize,
-          registration_number: `UAE-${String(20000 + i + (page - 1) * pageSize).padStart(5, '0')}`,
-          driver_name: `Driver ${i + 1 + (page - 1) * pageSize}`,
-          status: ['Active', 'Pending', 'Due', 'Overdue'][i % 4],
-          object_no: 100000 + i + (page - 1) * pageSize,
-          model: ['Camry', 'Patrol', 'Pajero', 'Accord', 'Explorer'][i % 5],
-          make: ['Toyota', 'Nissan', 'Mitsubishi', 'Honda', 'Ford'][i % 5],
-          vehicle_type: ['Sedan', 'SUV', 'Pickup', 'Van'][i % 4],
-          order_status: ['New', 'In Progress', 'Completed', 'Cancelled'][i % 4],
-          is_renewal: i % 3 === 0,
-          is_new: i % 5 === 0,
-          due_date: new Date(Date.now() + (i - 5) * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-        }));
-        setOrders(mockOrders);
-        setTotalItems(1804);
-        setTotalPages(Math.ceil(1804 / pageSize));
+        console.error('Error fetching renewals list:', error);
+        setItems([]);
+        setTotalItems(0);
+        setTotalPages(1);
       } finally {
         setTableLoading(false);
       }
     };
-    fetchOrders();
-  }, [page, pageSize, sortBy, sortOrder]);
+    fetchList();
+  }, [page, pageSize, sortBy, sortOrder, filterType, driverSearch, licensePlateSearch, makeFilter, statusFilter, orderStatus]);
+
+  // Handle KPI tile click
+  const handleTileClick = (tile: FilterType, tileName: string) => {
+    setFilterType(tile);
+    setActiveKpiTile(tileName);
+    setPage(1); // Reset to first page when changing filter
+  };
 
   // Handle search
   const handleSearch = () => {
@@ -186,6 +218,8 @@ export default function RenewalsOrdersPage() {
     setDueForRenewal(false);
     setOverdueWithOrder(false);
     setOverdueWithoutOrder(false);
+    setFilterType('all');
+    setActiveKpiTile(null);
     setPage(1);
   };
 
@@ -202,14 +236,19 @@ export default function RenewalsOrdersPage() {
   // Handle export
   const handleExport = async () => {
     try {
-      const blob = await api.exportVehicles('excel', {
-        driver: driverSearch || undefined,
-        license_plate: licensePlateSearch || undefined
+      const blob = await api.exportRenewals({
+        filter_type: filterType,
+        search: driverSearch || licensePlateSearch || undefined,
+        make: makeFilter || undefined,
+        renewal_status: statusFilter || undefined,
+        order_status_code: orderStatus ? parseInt(orderStatus, 10) : undefined,
+        format: 'csv'
       });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `renewals_orders_${new Date().toISOString().split('T')[0]}.xlsx`;
+      const filename = filterType.includes('order') ? 'orders' : 'renewals';
+      a.download = `${filename}_${new Date().toISOString().split('T')[0]}.csv`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -287,60 +326,139 @@ export default function RenewalsOrdersPage() {
       {/* KPI Cards - 5 tiles */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {/* Overdue Renewals with an order */}
-        <div className="glass-panel p-5 hover:border-brand-orange/30 transition-colors cursor-pointer group">
+        <div
+          onClick={() => handleTileClick('overdue_with_order', 'overdue_with_order')}
+          className={`glass-panel p-5 transition-colors cursor-pointer group ${
+            activeKpiTile === 'overdue_with_order'
+              ? 'border-brand-orange ring-2 ring-brand-orange/30'
+              : 'hover:border-brand-orange/30'
+          }`}
+        >
           <div className="flex flex-col items-center text-center">
-            <span className="text-3xl font-bold text-white group-hover:text-brand-orange transition-colors">
+            <span className={`text-3xl font-bold transition-colors ${
+              activeKpiTile === 'overdue_with_order' ? 'text-brand-orange' : 'text-white group-hover:text-brand-orange'
+            }`}>
               {loading ? '...' : formatNumber(kpis?.overdue_renewals_with_order || 0)}
             </span>
             <span className="text-xs text-white/50 mt-2">Overdue Renewals with an order</span>
-            <ChevronDown className="h-4 w-4 text-white/30 mt-2 group-hover:text-white/50 transition-colors" />
+            <ChevronDown className={`h-4 w-4 mt-2 transition-colors ${
+              activeKpiTile === 'overdue_with_order' ? 'text-white/50' : 'text-white/30 group-hover:text-white/50'
+            }`} />
           </div>
         </div>
 
         {/* Overdue Renewals with no order */}
-        <div className="glass-panel p-5 hover:border-brand-cyan/30 transition-colors cursor-pointer group">
+        <div
+          onClick={() => handleTileClick('overdue_no_order', 'overdue_no_order')}
+          className={`glass-panel p-5 transition-colors cursor-pointer group ${
+            activeKpiTile === 'overdue_no_order'
+              ? 'border-brand-cyan ring-2 ring-brand-cyan/30'
+              : 'hover:border-brand-cyan/30'
+          }`}
+        >
           <div className="flex flex-col items-center text-center">
-            <span className="text-3xl font-bold text-white group-hover:text-brand-cyan transition-colors">
+            <span className={`text-3xl font-bold transition-colors ${
+              activeKpiTile === 'overdue_no_order' ? 'text-brand-cyan' : 'text-white group-hover:text-brand-cyan'
+            }`}>
               {loading ? '...' : formatNumber(kpis?.overdue_renewals_no_order || 0)}
             </span>
             <span className="text-xs text-white/50 mt-2">Overdue Renewals with no order</span>
-            <ChevronDown className="h-4 w-4 text-white/30 mt-2 group-hover:text-white/50 transition-colors" />
+            <ChevronDown className={`h-4 w-4 mt-2 transition-colors ${
+              activeKpiTile === 'overdue_no_order' ? 'text-white/50' : 'text-white/30 group-hover:text-white/50'
+            }`} />
           </div>
         </div>
 
         {/* Renewals Due without order */}
-        <div className="glass-panel p-5 hover:border-brand-green/30 transition-colors cursor-pointer group">
+        <div
+          onClick={() => handleTileClick('due_no_order', 'due_no_order')}
+          className={`glass-panel p-5 transition-colors cursor-pointer group ${
+            activeKpiTile === 'due_no_order'
+              ? 'border-brand-green ring-2 ring-brand-green/30'
+              : 'hover:border-brand-green/30'
+          }`}
+        >
           <div className="flex flex-col items-center text-center">
-            <span className="text-3xl font-bold text-white group-hover:text-brand-green transition-colors">
+            <span className={`text-3xl font-bold transition-colors ${
+              activeKpiTile === 'due_no_order' ? 'text-brand-green' : 'text-white group-hover:text-brand-green'
+            }`}>
               {loading ? '...' : formatNumber(kpis?.renewals_due_without_order || 0)}
             </span>
             <span className="text-xs text-white/50 mt-2">Renewals Due without order</span>
-            <ChevronDown className="h-4 w-4 text-white/30 mt-2 group-hover:text-white/50 transition-colors" />
+            <ChevronDown className={`h-4 w-4 mt-2 transition-colors ${
+              activeKpiTile === 'due_no_order' ? 'text-white/50' : 'text-white/30 group-hover:text-white/50'
+            }`} />
           </div>
         </div>
 
         {/* Renewal Orders */}
-        <div className="glass-panel p-5 hover:border-brand-amber/30 transition-colors cursor-pointer group">
+        <div
+          onClick={() => handleTileClick('renewal_orders', 'renewal_orders')}
+          className={`glass-panel p-5 transition-colors cursor-pointer group ${
+            activeKpiTile === 'renewal_orders'
+              ? 'border-brand-amber ring-2 ring-brand-amber/30'
+              : 'hover:border-brand-amber/30'
+          }`}
+        >
           <div className="flex flex-col items-center text-center">
-            <span className="text-3xl font-bold text-white group-hover:text-brand-amber transition-colors">
+            <span className={`text-3xl font-bold transition-colors ${
+              activeKpiTile === 'renewal_orders' ? 'text-brand-amber' : 'text-white group-hover:text-brand-amber'
+            }`}>
               {loading ? '...' : formatNumber(kpis?.renewal_orders || 0)}
             </span>
             <span className="text-xs text-white/50 mt-2">Renewal Orders</span>
-            <ChevronDown className="h-4 w-4 text-white/30 mt-2 group-hover:text-white/50 transition-colors" />
+            <ChevronDown className={`h-4 w-4 mt-2 transition-colors ${
+              activeKpiTile === 'renewal_orders' ? 'text-white/50' : 'text-white/30 group-hover:text-white/50'
+            }`} />
           </div>
         </div>
 
         {/* New Orders */}
-        <div className="glass-panel p-5 hover:border-brand-teal/30 transition-colors cursor-pointer group">
+        <div
+          onClick={() => handleTileClick('new_orders', 'new_orders')}
+          className={`glass-panel p-5 transition-colors cursor-pointer group ${
+            activeKpiTile === 'new_orders'
+              ? 'border-brand-teal ring-2 ring-brand-teal/30'
+              : 'hover:border-brand-teal/30'
+          }`}
+        >
           <div className="flex flex-col items-center text-center">
-            <span className="text-3xl font-bold text-white group-hover:text-brand-teal transition-colors">
+            <span className={`text-3xl font-bold transition-colors ${
+              activeKpiTile === 'new_orders' ? 'text-brand-teal' : 'text-white group-hover:text-brand-teal'
+            }`}>
               {loading ? '...' : formatNumber(kpis?.new_orders || 0)}
             </span>
             <span className="text-xs text-white/50 mt-2">New Orders</span>
-            <ChevronDown className="h-4 w-4 text-white/30 mt-2 group-hover:text-white/50 transition-colors" />
+            <ChevronDown className={`h-4 w-4 mt-2 transition-colors ${
+              activeKpiTile === 'new_orders' ? 'text-white/50' : 'text-white/30 group-hover:text-white/50'
+            }`} />
           </div>
         </div>
       </div>
+
+      {/* Active Filter Indicator */}
+      {activeKpiTile && (
+        <div className="flex items-center space-x-2">
+          <span className="text-sm text-white/50">Filtered by:</span>
+          <span className="px-3 py-1 bg-brand-orange/20 text-brand-orange rounded-full text-sm font-medium">
+            {activeKpiTile === 'overdue_with_order' && 'Overdue with Order'}
+            {activeKpiTile === 'overdue_no_order' && 'Overdue without Order'}
+            {activeKpiTile === 'due_no_order' && 'Due without Order'}
+            {activeKpiTile === 'renewal_orders' && 'Renewal Orders'}
+            {activeKpiTile === 'new_orders' && 'New Orders'}
+          </span>
+          <button
+            onClick={() => {
+              setFilterType('all');
+              setActiveKpiTile(null);
+              setPage(1);
+            }}
+            className="text-white/50 hover:text-white text-sm underline"
+          >
+            Clear filter
+          </button>
+        </div>
+      )}
 
       {/* Search & Filters */}
       <div className="glass-panel p-5">
@@ -466,17 +584,15 @@ export default function RenewalsOrdersPage() {
                     className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-white appearance-none focus:outline-none focus:border-brand-orange/50 transition-colors"
                   >
                     <option value="">All Makes</option>
-                    <option value="Toyota">Toyota</option>
-                    <option value="Nissan">Nissan</option>
-                    <option value="Mitsubishi">Mitsubishi</option>
-                    <option value="Honda">Honda</option>
-                    <option value="Ford">Ford</option>
+                    {filterOptions?.makes.map((make) => (
+                      <option key={make} value={make}>{make}</option>
+                    ))}
                   </select>
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50 pointer-events-none" />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-white/70 mb-2">Status</label>
+                <label className="block text-sm font-medium text-white/70 mb-2">Renewal Status</label>
                 <div className="relative">
                   <select
                     value={statusFilter}
@@ -484,10 +600,9 @@ export default function RenewalsOrdersPage() {
                     className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-white appearance-none focus:outline-none focus:border-brand-orange/50 transition-colors"
                   >
                     <option value="">All Status</option>
-                    <option value="Active">Active</option>
-                    <option value="Pending">Pending</option>
-                    <option value="Due">Due</option>
-                    <option value="Overdue">Overdue</option>
+                    {filterOptions?.renewal_statuses.map((status) => (
+                      <option key={status.value} value={status.value}>{status.label}</option>
+                    ))}
                   </select>
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50 pointer-events-none" />
                 </div>
@@ -501,10 +616,9 @@ export default function RenewalsOrdersPage() {
                     className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-white appearance-none focus:outline-none focus:border-brand-orange/50 transition-colors"
                   >
                     <option value="">All Order Status</option>
-                    <option value="New">New</option>
-                    <option value="In Progress">In Progress</option>
-                    <option value="Completed">Completed</option>
-                    <option value="Cancelled">Cancelled</option>
+                    {filterOptions?.order_statuses.map((status) => (
+                      <option key={status.code} value={status.code}>{status.label}</option>
+                    ))}
                   </select>
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50 pointer-events-none" />
                 </div>
@@ -706,88 +820,109 @@ export default function RenewalsOrdersPage() {
                     Loading...
                   </td>
                 </tr>
-              ) : orders.length === 0 ? (
+              ) : items.length === 0 ? (
                 <tr>
                   <td
                     colSpan={visibleColumns.length}
                     className="px-4 py-8 text-center text-white/50"
                   >
-                    No orders found
+                    No records found
                   </td>
                 </tr>
               ) : (
-                orders.map((order) => (
+                items.map((item, index) => (
                   <tr
-                    key={order.id}
+                    key={item.vehicle_id || item.order_no || index}
                     className="border-b border-white/5 hover:bg-white/5 cursor-pointer transition-colors"
                   >
                     {visibleColumns.includes('registration_number') && (
                       <td className="px-4 py-3 text-sm text-white font-medium">
-                        {order.registration_number || '-'}
+                        {item.registration_number || '-'}
                       </td>
                     )}
                     {visibleColumns.includes('driver_name') && (
                       <td className="px-4 py-3 text-sm text-white/70">
-                        {order.driver_name || '-'}
+                        {item.driver_name || '-'}
                       </td>
                     )}
-                    {visibleColumns.includes('status') && (
+                    {visibleColumns.includes('renewal_status') && (
                       <td className="px-4 py-3 text-sm">
                         <span
                           className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                            order.status === 'Active'
+                            item.renewal_status === 'Active'
                               ? 'bg-brand-green/20 text-brand-green'
-                              : order.status === 'Overdue'
+                              : item.renewal_status === 'Overdue'
                               ? 'bg-red-500/20 text-red-400'
-                              : order.status === 'Due'
+                              : item.renewal_status === 'Due Soon'
                               ? 'bg-brand-amber/20 text-brand-amber'
+                              : item.renewal_status === 'Due'
+                              ? 'bg-brand-cyan/20 text-brand-cyan'
                               : 'bg-white/10 text-white/70'
                           }`}
                         >
-                          {order.status || '-'}
+                          {item.renewal_status || '-'}
                         </span>
                       </td>
                     )}
                     {visibleColumns.includes('object_no') && (
                       <td className="px-4 py-3 text-sm text-white/70">
-                        {order.object_no || '-'}
+                        {item.object_no || item.vehicle_id || '-'}
                       </td>
                     )}
-                    {visibleColumns.includes('model') && (
+                    {visibleColumns.includes('make_and_model') && (
                       <td className="px-4 py-3 text-sm text-white/70">
-                        {order.model || '-'}
+                        {item.make_and_model || '-'}
                       </td>
                     )}
-                    {visibleColumns.includes('make') && (
+                    {visibleColumns.includes('customer_name') && (
                       <td className="px-4 py-3 text-sm text-white/70">
-                        {order.make || '-'}
+                        {item.customer_name || '-'}
                       </td>
                     )}
-                    {visibleColumns.includes('vehicle_type') && (
+                    {visibleColumns.includes('days_to_contract_end') && (
+                      <td className="px-4 py-3 text-sm">
+                        <span
+                          className={`font-medium ${
+                            item.days_to_contract_end !== undefined && item.days_to_contract_end < 0
+                              ? 'text-red-400'
+                              : item.days_to_contract_end !== undefined && item.days_to_contract_end <= 30
+                              ? 'text-brand-amber'
+                              : 'text-white/70'
+                          }`}
+                        >
+                          {item.days_to_contract_end !== undefined ? item.days_to_contract_end : '-'}
+                        </span>
+                      </td>
+                    )}
+                    {visibleColumns.includes('expected_end_date') && (
                       <td className="px-4 py-3 text-sm text-white/70">
-                        {order.vehicle_type || '-'}
+                        {item.expected_end_date || '-'}
                       </td>
                     )}
                     {visibleColumns.includes('order_status') && (
                       <td className="px-4 py-3 text-sm">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                            order.order_status === 'New'
-                              ? 'bg-brand-cyan/20 text-brand-cyan'
-                              : order.order_status === 'Completed'
-                              ? 'bg-brand-green/20 text-brand-green'
-                              : order.order_status === 'Cancelled'
-                              ? 'bg-red-500/20 text-red-400'
-                              : 'bg-brand-amber/20 text-brand-amber'
-                          }`}
-                        >
-                          {order.order_status || '-'}
-                        </span>
+                        {item.order_status ? (
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                              item.order_status === 'Created'
+                                ? 'bg-brand-cyan/20 text-brand-cyan'
+                                : item.order_status === 'Vehicle Delivered'
+                                ? 'bg-brand-green/20 text-brand-green'
+                                : item.order_status === 'Cancelled'
+                                ? 'bg-red-500/20 text-red-400'
+                                : 'bg-brand-amber/20 text-brand-amber'
+                            }`}
+                          >
+                            {item.order_status}
+                          </span>
+                        ) : (
+                          <span className="text-white/30">No order</span>
+                        )}
                       </td>
                     )}
-                    {visibleColumns.includes('due_date') && (
+                    {visibleColumns.includes('order_no') && (
                       <td className="px-4 py-3 text-sm text-white/70">
-                        {order.due_date || '-'}
+                        {item.order_no || '-'}
                       </td>
                     )}
                   </tr>

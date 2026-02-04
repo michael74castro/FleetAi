@@ -56,7 +56,7 @@ CCCA                    24           8,219 ccca.xlsx
 CCCO                    39           2,945 ccco.xlsx           
 CCCP                   182          33,652 cccp.xlsx           
 CCCU                    50           2,387 cccu.xlsx           
-CCDA                    65           9,357 ccda.xlsx           
+CCDA                   156               0 ccda.xlsx           
 CCDR                    63          33,633 ccdr.xlsx           
 CCFC                    65           9,357 ccfc.xlsx           
 CCFID                   65           9,357 ccfid.xlsx          
@@ -579,7 +579,7 @@ CREATE TABLE [landing].[CCCU] (
     [row_hash] AS HASHBYTES('SHA2_256', CONCAT_WS('|', COALESCE(CAST([CCCU_CUNULO] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUGNLO] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUNOLO] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUNOL2] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUNOL3] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUCLLO] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUCPLO] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUADLO] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CULOLO] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUCALO] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUNTLO] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUNFLO] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUNELO] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUCTLO] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CURPPD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUCOUC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CURPCD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUAPEC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUAPEY] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUAPEM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUAPED] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUAPNC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUAPNV] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUAPNT] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUPXNC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUPXNV] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUPXNT] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUFLCD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUCVLO] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUAPRS] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUCLPE] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CURSFL] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CURSFN] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CURSLO] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUNEL2] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUNEL3] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CURPAS] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUAPBC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUAPBY] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUAPBM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUAPBD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUBLKB] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUKBKB] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUKRKR] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CULLKB] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUAPAC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUAPAV] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUAPAT] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUCCLO] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCCU_CUNKLO] AS VARCHAR(MAX)), ''))) PERSISTED,
 
     -- Source columns (50 columns with CCCU_ prefix)
-    [CCCU_CUNULO] INT NULL,
+    [CCCU_CUNULO_Client_Number] INT NULL,
     [CCCU_CUGNLO_Client_Group_Number] INT NULL,
     [CCCU_CUNOLO_Name] VARCHAR(50) NULL,
     [CCCU_CUNOL2_Name_Cont] VARCHAR(50) NULL,
@@ -638,80 +638,171 @@ CREATE INDEX [IX_landing_CCCU_hash] ON [landing].[CCCU]([row_hash]);
 GO
 
 -- Table: CCDA
--- Source: ccda.xlsx
--- Columns: 65
+-- Source: CCDA.txt (Damages by Object Number)
+-- Columns: 156
 CREATE TABLE [landing].[CCDA] (
     -- Metadata columns for CDC
     [extraction_id] BIGINT IDENTITY(1,1),
     [extraction_timestamp] DATETIME2 DEFAULT GETUTCDATE(),
-    [row_hash] AS HASHBYTES('SHA2_256', CONCAT_WS('|', COALESCE(CAST([CCDA_AUMKCD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUMKDS] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUMDCD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUMDDS] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUMDGH] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUMDGR] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUMDGS] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUTYDS] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUOBTY] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUTDN1] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUTDN2] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUMAM1] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUMAF1] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUMAF2] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUMAF3] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUNODO] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUNOGE] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUNOSE] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUMDTK] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUTYCC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUMDKW] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUFCHP] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUAUUN] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUMXWE] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUMXUN] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUSTRD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUFUCD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUFUCF] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUAURO] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUTYPR] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUAUIN] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUAUI2] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUDLCH] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUTYWE] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AULGCH] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUWATM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUMDDC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUTYN1] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUTYD1] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUTYN2] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUTYD2] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUC9CD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AURPPD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUCOUC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUVOLC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUDISC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUCONC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUCURC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUAUBC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_AUAUTH] AS VARCHAR(MAX)), ''))) PERSISTED,
+    [row_hash] AS HASHBYTES('SHA2_256', CONCAT_WS('|', COALESCE(CAST([CCDA_DAOBNO] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADANO] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADADR] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADACC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAYY] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAMM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADADD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADADS] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAD2] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAD3] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAAD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAAR] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADALA] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAAM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAMI] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAFF] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAC1] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAC2] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAC3] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DARPPD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DACOUC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DASTCD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADVCD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADASN] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADATY] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAPE] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADASC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAPIAM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAMNFA] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DATOCD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADASQ] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADMM1] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADMM2] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADRG1] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADRG2] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAPS] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DASVAM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAPEA] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DARSGA] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DARSAD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DARSCP] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DARSLC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DARSTL] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADARP] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADARC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DARERP] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DARERC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADRRC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADRRY] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADRRM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADRRD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAPPCC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAPPYY] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAPPMM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAPPDD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAPRCC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAPRYY] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAPRMM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAPRDD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAFOCC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAFOYY] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAFOMM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAFODD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAIRPC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAIRPY] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAIRPM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAIRPD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAFRPC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAFRPY] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAFRPM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAFRPD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAFRRC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAFRRY] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAFRRM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAFRRD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAREPD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAICRC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAICRY] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAICRM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAICRD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAIPTC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAIPTY] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAIPTM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAIPTD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAPPC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAPPY] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAPPM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAPPD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAPRC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAPRY] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAPRM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAPRD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAFOC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAFOY] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAFOM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAFOD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAIRC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAIRY] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAIRM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAIRD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAFPC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAFPY] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAFPM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAFPD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAFRC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAFRY] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAFRM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAFRD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAREP] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAICC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAICY] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAICM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAICD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAD4] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAD5] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DATPAD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DATPPC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DATPIC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DATPLO] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DATPNM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAGD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAGM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAGC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAGY] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAIN] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAI2] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAAMBN] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAPRCD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAXD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAXM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAXC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAXY] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAID] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAIM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAIC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAIY] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAED] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAEM] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAEC] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAEY] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAVTCD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAINCN] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAINNA] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAMOAL] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAINRF] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAWROF] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DASALD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAFL] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAMO] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAMR] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DATPCD] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADRNX] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DADAC4] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DACPRV] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAPLDA] AS VARCHAR(MAX)), ''), COALESCE(CAST([CCDA_DAINT2] AS VARCHAR(MAX)), ''))) PERSISTED,
 
-    -- Source columns (65 columns with CCDA_ prefix)
-    [CCDA_AUMKCD_Make_Code] INT NULL,
-    [CCDA_AUMKDS_Make_Description] VARCHAR(50) NULL,
-    [CCDA_AUMDCD_Model_Code] INT NULL,
-    [CCDA_AUMDDS_Model_Description] VARCHAR(50) NULL,
-    [CCDA_AUMDGH_Model_Group_Higher_Level] VARCHAR(200) NULL,
-    [CCDA_AUMDGR_Model_Group_Code] INT NULL,
-    [CCDA_AUMDGS_Model_Group_Description] VARCHAR(200) NULL,
-    [CCDA_AUTYDS_Type_Description] VARCHAR(50) NULL,
-    [CCDA_AUOBTY_Automobile_Category] VARCHAR(200) NULL,
-    [CCDA_AUTDN1_Technical_Description_1] VARCHAR(50) NULL,
-    [CCDA_AUTDN2_Technical_Description_2] VARCHAR(50) NULL,
-    [CCDA_AUMAM1_1st_Maintenance_Mileage] INT NULL,
-    [CCDA_AUMAF1_Maintenance_Type_1_Mileage] INT NULL,
-    [CCDA_AUMAF2_Maintenance_Type_2_Mileage] INT NULL,
-    [CCDA_AUMAF3_Maintenance_Type_3_Mileage] INT NULL,
-    [CCDA_AUNODO_Number_Of_Doors] INT NULL,
-    [CCDA_AUNOGE_Number_Of_Gears] VARCHAR(50) NULL,
-    [CCDA_AUNOSE_Number_Of_Seats] INT NULL,
-    [CCDA_AUMDTK_Tank_Capacity] INT NULL,
-    [CCDA_AUTYCC_Cylinder_Capacity] INT NULL,
-    [CCDA_AUMDKW_Kw] INT NULL,
-    [CCDA_AUFCHP_Fiscal_Horse_Power] INT NULL,
-    [CCDA_AUAUUN_Unit_Code] VARCHAR(50) NULL,
-    [CCDA_AUMXWE_Maximum_Weight] INT NULL,
-    [CCDA_AUMXUN_Maximum_Number_Of_Unitsauun] INT NULL,
-    [CCDA_AUSTRD_Standard_Radio] VARCHAR(50) NULL,
-    [CCDA_AUFUCD_Fuel_Code] INT NULL,
-    [CCDA_AUFUCF_Standard_Consumption] DECIMAL(5,3) NULL,
-    [CCDA_AUAURO_Road_Tax_Code] VARCHAR(50) NULL,
-    [CCDA_AUTYPR_Catalog_Price] DECIMAL(11,4) NULL,
-    [CCDA_AUAUIN_Insurance_Code] VARCHAR(50) NULL,
-    [CCDA_AUAUI2_Insurance_Code_2] VARCHAR(200) NULL,
-    [CCDA_AUDLCH_Delivery_Charges] DECIMAL(4,3) NULL,
-    [CCDA_AUTYWE_Weight] INT NULL,
-    [CCDA_AULGCH_Supplement_Lpg] INT NULL,
-    [CCDA_AUWATM_Warranty_Length] INT NULL,
-    [CCDA_AUMDDC_Reduction] DECIMAL(7,4) NULL,
-    [CCDA_AUTYN1_Tyres_1_Number] INT NULL,
-    [CCDA_AUTYD1_Tyres_1_Description] VARCHAR(50) NULL,
-    [CCDA_AUTYN2_Tyres_2_Number] INT NULL,
-    [CCDA_AUTYD2_Tyres_2_Description] VARCHAR(50) NULL,
-    [CCDA_AUC9CD_Catalconverter_Cat] VARCHAR(50) NULL,
-    [CCDA_AURPPD_Reportingperiod] INT NULL,
-    [CCDA_AUCOUC_Country_Code] VARCHAR(50) NULL,
-    [CCDA_AUVOLC_Volume_Measurement] VARCHAR(50) NULL,
-    [CCDA_AUDISC_Distance_Measurement] VARCHAR(50) NULL,
-    [CCDA_AUCONC_Consumption_Measurement] VARCHAR(50) NULL,
-    [CCDA_AUCURC_Currency_Unit] VARCHAR(50) NULL,
-    [CCDA_AUAUBC_Width_Extern] INT NULL,
-    [CCDA_AUAUTH_Height_Extern] INT NULL,
-    [CCDA_AUAUTL_Length_Extern] INT NULL,
-    [CCDA_AUAUHE_Height_Intern] INT NULL,
-    [CCDA_AUAUWI_Width_Intern] INT NULL,
-    [CCDA_AUAUTG_Max_Train_Weight] INT NULL,
-    [CCDA_AUTYCL_Type_Object] INT NULL,
-    [CCDA_AUAUAC_Axe_Configuration] VARCHAR(200) NULL,
-    [CCDA_AUAUDI_Horse_Power_Din] INT NULL,
-    [CCDA_AUAULE_Length_Intern] INT NULL,
-    [CCDA_AUMQNO_Residual_Matrix_Number] INT NULL,
-    [CCDA_AUMQNR_Maintenace_Matrix_Number] INT NULL,
-    [CCDA_AUTYSC_Type_Status_Code] INT NULL,
-    [CCDA_AUENAV_Energyaverage] INT NULL,
-    [CCDA_AUEUR_Eurostandard] INT NULL,
-    [CCDA_AUCAT_Category] VARCHAR(50) NULL,
-    [CCDA_AUCO2_Co2emission] INT NULL,
+    -- Source columns (156 columns with CCDA_ prefix, DA-prefix damage fields)
+    [CCDA_DAOBNO_Object_Number] INT NULL,
+    [CCDA_DADANO_Damage_Number] VARCHAR(15) NULL,
+    [CCDA_DADADR_Driver_Number] INT NULL,
+    [CCDA_DADACC_Damage_Date_Century] INT NULL,
+    [CCDA_DADAYY_Damage_Date_Year] INT NULL,
+    [CCDA_DADAMM_Damage_Date_Month] INT NULL,
+    [CCDA_DADADD_Damage_Date_Day] INT NULL,
+    [CCDA_DADADS_Accident_Description_1] VARCHAR(80) NULL,
+    [CCDA_DADAD2_Accident_Description_2] VARCHAR(80) NULL,
+    [CCDA_DADAD3_Accident_Description_3] VARCHAR(80) NULL,
+    [CCDA_DADAAD_Accident_Location_Address] VARCHAR(30) NULL,
+    [CCDA_DADAAR_Accident_Area_Code] VARCHAR(10) NULL,
+    [CCDA_DADALA_Accident_Country_Code] VARCHAR(3) NULL,
+    [CCDA_DADAAM_Damage_Repair_Amount] DECIMAL(17,6) NULL,
+    [CCDA_DADAMI_Damage_Mileage] INT NULL,
+    [CCDA_DADAFF_Fault_Code] VARCHAR(3) NULL,
+    [CCDA_DADAC1_Damage_Comments_Code_1] VARCHAR(3) NULL,
+    [CCDA_DADAC2_Damage_Comments_Code_2] VARCHAR(3) NULL,
+    [CCDA_DADAC3_Damage_Comments_Code_3] VARCHAR(3) NULL,
+    [CCDA_DARPPD_Reporting_Period] INT NULL,
+    [CCDA_DACOUC_Country_Code] VARCHAR(3) NULL,
+    [CCDA_DASTCD_Damage_Recourse] VARCHAR(3) NULL,
+    [CCDA_DADVCD_Damage_Tow] VARCHAR(1) NULL,
+    [CCDA_DADASN_Damage_Repair_Supplier] BIGINT NULL,
+    [CCDA_DADATY_Damage_Type] VARCHAR(3) NULL,
+    [CCDA_DADAPE_Responsible_Person_Insurance] VARCHAR(10) NULL,
+    [CCDA_DADASC_Damage_Status_Code] VARCHAR(1) NULL,
+    [CCDA_DAPIAM_Amount_Excl_VAT] DECIMAL(17,6) NULL,
+    [CCDA_DAMNFA_Accident_Cost] DECIMAL(17,6) NULL,
+    [CCDA_DATOCD_Total_Loss_Code] VARCHAR(3) NULL,
+    [CCDA_DADASQ_Supplier_Rotation_Number] VARCHAR(3) NULL,
+    [CCDA_DADMM1_Model_Car_Second_Part] VARCHAR(25) NULL,
+    [CCDA_DADMM2_Model_Car_Third_Part] VARCHAR(25) NULL,
+    [CCDA_DADRG1_Registration_Second_Part] VARCHAR(8) NULL,
+    [CCDA_DADRG2_Registration_Third_Part] VARCHAR(8) NULL,
+    [CCDA_DADAPS_Damage_Place_Comment] VARCHAR(30) NULL,
+    [CCDA_DASVAM_Damage_Amount_Expected] DECIMAL(17,6) NULL,
+    [CCDA_DAAPEA_European_Assistance_Process] VARCHAR(20) NULL,
+    [CCDA_DARSGA_Garage_Name] VARCHAR(35) NULL,
+    [CCDA_DARSAD_Garage_Address] VARCHAR(35) NULL,
+    [CCDA_DARSCP_Garage_Post_Code] VARCHAR(10) NULL,
+    [CCDA_DARSLC_Garage_Locality] VARCHAR(25) NULL,
+    [CCDA_DARSTL_Garage_Telephone] VARCHAR(12) NULL,
+    [CCDA_DADARP_Claimed_Deductible_Repair] DECIMAL(17,6) NULL,
+    [CCDA_DADARC_Claimed_Rent_A_Car] DECIMAL(17,6) NULL,
+    [CCDA_DARERP_Refunded_Deductible_Repair] DECIMAL(17,6) NULL,
+    [CCDA_DARERC_Refunded_Rent_A_Car] DECIMAL(17,6) NULL,
+    [CCDA_DADRRC_Refund_Request_Date_Century] INT NULL,
+    [CCDA_DADRRY_Refund_Request_Date_Year] INT NULL,
+    [CCDA_DADRRM_Refund_Request_Date_Month] INT NULL,
+    [CCDA_DADRRD_Refund_Request_Date_Day] INT NULL,
+    [CCDA_DAPPCC_Expected_Insurance_Date_Century] INT NULL,
+    [CCDA_DAPPYY_Expected_Insurance_Date_Year] INT NULL,
+    [CCDA_DAPPMM_Expected_Insurance_Date_Month] INT NULL,
+    [CCDA_DAPPDD_Expected_Insurance_Date_Day] INT NULL,
+    [CCDA_DAPRCC_Real_Insurance_Date_Century] INT NULL,
+    [CCDA_DAPRYY_Real_Insurance_Date_Year] INT NULL,
+    [CCDA_DAPRMM_Real_Insurance_Date_Month] INT NULL,
+    [CCDA_DAPRDD_Real_Insurance_Date_Day] INT NULL,
+    [CCDA_DAFOCC_Expected_Budget_Due_Date_Century] INT NULL,
+    [CCDA_DAFOYY_Expected_Budget_Due_Date_Year] INT NULL,
+    [CCDA_DAFOMM_Expected_Budget_Due_Date_Month] INT NULL,
+    [CCDA_DAFODD_Expected_Budget_Due_Date_Day] INT NULL,
+    [CCDA_DAIRPC_Expected_Begin_Repair_Date_Century] INT NULL,
+    [CCDA_DAIRPY_Expected_Begin_Repair_Date_Year] INT NULL,
+    [CCDA_DAIRPM_Expected_Begin_Repair_Date_Month] INT NULL,
+    [CCDA_DAIRPD_Expected_Begin_Repair_Date_Day] INT NULL,
+    [CCDA_DAFRPC_Expected_End_Repair_Date_Century] INT NULL,
+    [CCDA_DAFRPY_Expected_End_Repair_Date_Year] INT NULL,
+    [CCDA_DAFRPM_Expected_End_Repair_Date_Month] INT NULL,
+    [CCDA_DAFRPD_Expected_End_Repair_Date_Day] INT NULL,
+    [CCDA_DAFRRC_Real_End_Repair_Date_Century] INT NULL,
+    [CCDA_DAFRRY_Real_End_Repair_Date_Year] INT NULL,
+    [CCDA_DAFRRM_Real_End_Repair_Date_Month] INT NULL,
+    [CCDA_DAFRRD_Real_End_Repair_Date_Day] INT NULL,
+    [CCDA_DAREPD_Number_Repair_Days] INT NULL,
+    [CCDA_DAICRC_Client_Informed_End_Repair_Century] INT NULL,
+    [CCDA_DAICRY_Client_Informed_End_Repair_Year] INT NULL,
+    [CCDA_DAICRM_Client_Informed_End_Repair_Month] INT NULL,
+    [CCDA_DAICRD_Client_Informed_End_Repair_Day] INT NULL,
+    [CCDA_DAIPTC_Inform_Insurance_Total_Loss_Century] INT NULL,
+    [CCDA_DAIPTY_Inform_Insurance_Total_Loss_Year] INT NULL,
+    [CCDA_DAIPTM_Inform_Insurance_Total_Loss_Month] INT NULL,
+    [CCDA_DAIPTD_Inform_Insurance_Total_Loss_Day] INT NULL,
+    [CCDA_DAAPPC_Add_Expected_Insurance_Century] INT NULL,
+    [CCDA_DAAPPY_Add_Expected_Insurance_Year] INT NULL,
+    [CCDA_DAAPPM_Add_Expected_Insurance_Month] INT NULL,
+    [CCDA_DAAPPD_Add_Expected_Insurance_Day] INT NULL,
+    [CCDA_DAAPRC_Add_Real_Insurance_Century] INT NULL,
+    [CCDA_DAAPRY_Add_Real_Insurance_Year] INT NULL,
+    [CCDA_DAAPRM_Add_Real_Insurance_Month] INT NULL,
+    [CCDA_DAAPRD_Add_Real_Insurance_Day] INT NULL,
+    [CCDA_DAAFOC_Add_Expected_Budget_Due_Century] INT NULL,
+    [CCDA_DAAFOY_Add_Expected_Budget_Due_Year] INT NULL,
+    [CCDA_DAAFOM_Add_Expected_Budget_Due_Month] INT NULL,
+    [CCDA_DAAFOD_Add_Expected_Budget_Due_Day] INT NULL,
+    [CCDA_DAAIRC_Add_Expected_Begin_Repair_Century] INT NULL,
+    [CCDA_DAAIRY_Add_Expected_Begin_Repair_Year] INT NULL,
+    [CCDA_DAAIRM_Add_Expected_Begin_Repair_Month] INT NULL,
+    [CCDA_DAAIRD_Add_Expected_Begin_Repair_Day] INT NULL,
+    [CCDA_DAAFPC_Add_Expected_End_Repair_Century] INT NULL,
+    [CCDA_DAAFPY_Add_Expected_End_Repair_Year] INT NULL,
+    [CCDA_DAAFPM_Add_Expected_End_Repair_Month] INT NULL,
+    [CCDA_DAAFPD_Add_Expected_End_Repair_Day] INT NULL,
+    [CCDA_DAAFRC_Add_Real_End_Repair_Century] INT NULL,
+    [CCDA_DAAFRY_Add_Real_End_Repair_Year] INT NULL,
+    [CCDA_DAAFRM_Add_Real_End_Repair_Month] INT NULL,
+    [CCDA_DAAFRD_Add_Real_End_Repair_Day] INT NULL,
+    [CCDA_DAAREP_Add_Number_Repair_Days] INT NULL,
+    [CCDA_DAAICC_Add_Client_Informed_End_Repair_Century] INT NULL,
+    [CCDA_DAAICY_Add_Client_Informed_End_Repair_Year] INT NULL,
+    [CCDA_DAAICM_Add_Client_Informed_End_Repair_Month] INT NULL,
+    [CCDA_DAAICD_Add_Client_Informed_End_Repair_Day] INT NULL,
+    [CCDA_DADAD4_Accident_Description_4] VARCHAR(80) NULL,
+    [CCDA_DADAD5_Accident_Description_5] VARCHAR(80) NULL,
+    [CCDA_DATPAD_Third_Party_Address] VARCHAR(35) NULL,
+    [CCDA_DATPPC_Third_Party_Postal_Code] VARCHAR(10) NULL,
+    [CCDA_DATPIC_Insurance_Co_Third_Party] BIGINT NULL,
+    [CCDA_DATPLO_Third_Party_Locality] VARCHAR(35) NULL,
+    [CCDA_DATPNM_Third_Party_Name] VARCHAR(35) NULL,
+    [CCDA_DADAGD_Garage_Entrance_Date_Day] INT NULL,
+    [CCDA_DADAGM_Garage_Entrance_Date_Month] INT NULL,
+    [CCDA_DADAGC_Garage_Entrance_Date_Century] INT NULL,
+    [CCDA_DADAGY_Garage_Entrance_Date_Year] INT NULL,
+    [CCDA_DADAIN_Damage_Coverage_Code] VARCHAR(10) NULL,
+    [CCDA_DADAI2_Theoretical_Damage_Coverage_Code] VARCHAR(3) NULL,
+    [CCDA_DAAMBN_Amount_Brutto_Netto_Code] VARCHAR(1) NULL,
+    [CCDA_DAPRCD_Problem_Encountered_Code] VARCHAR(3) NULL,
+    [CCDA_DADAXD_Date_X_Day] INT NULL,
+    [CCDA_DADAXM_Date_X_Month] INT NULL,
+    [CCDA_DADAXC_Date_X_Century] INT NULL,
+    [CCDA_DADAXY_Date_X_Year] INT NULL,
+    [CCDA_DADAID_Date_I_Day] INT NULL,
+    [CCDA_DADAIM_Date_I_Month] INT NULL,
+    [CCDA_DADAIC_Date_I_Century] INT NULL,
+    [CCDA_DADAIY_Date_I_Year] INT NULL,
+    [CCDA_DADAED_Date_E_Day] INT NULL,
+    [CCDA_DADAEM_Date_E_Month] INT NULL,
+    [CCDA_DADAEC_Date_E_Century] INT NULL,
+    [CCDA_DADAEY_Date_E_Year] INT NULL,
+    [CCDA_DAVTCD_VAT_Code] VARCHAR(3) NULL,
+    [CCDA_DAINCN_Insurance_Co_Number] BIGINT NULL,
+    [CCDA_DAINNA_Insurance_Co_Rotation_Number] VARCHAR(3) NULL,
+    [CCDA_DAMOAL_Monthly_Allowance] DECIMAL(17,6) NULL,
+    [CCDA_DAINRF_Reimbursed_Flow_Insurance] DECIMAL(17,6) NULL,
+    [CCDA_DAWROF_Write_Off] DECIMAL(17,6) NULL,
+    [CCDA_DASALD_Saldo] DECIMAL(17,6) NULL,
+    [CCDA_DADAFL_Damage_Fault_Level] VARCHAR(3) NULL,
+    [CCDA_DADAMO_Amount_Own_Risk] DECIMAL(17,6) NULL,
+    [CCDA_DADAMR_Amount_Refunded] DECIMAL(17,6) NULL,
+    [CCDA_DATPCD_Third_Party_Code] VARCHAR(3) NULL,
+    [CCDA_DADRNX_Driver_Name_Occasionally] VARCHAR(30) NULL,
+    [CCDA_DADAC4_Damage_Comments_Code_4] VARCHAR(5) NULL,
+    [CCDA_DACPRV_Residual_Value] DECIMAL(17,6) NULL,
+    [CCDA_DAPLDA_Amount_Profit_Lost] DECIMAL(17,6) NULL,
+    [CCDA_DAINT2_Amount_Special_Own_Risk] FLOAT NULL,
 
     CONSTRAINT [PK_landing_CCDA] PRIMARY KEY ([extraction_id])
 );
@@ -2041,3 +2132,541 @@ CREATE INDEX [IX_landing_CWPO_timestamp] ON [landing].[CWPO]([extraction_timesta
 CREATE INDEX [IX_landing_CWPO_hash] ON [landing].[CWPO]([row_hash]);
 GO
 
+-- ============================================================================
+-- Landing Table Relationship Mapping
+-- ============================================================================
+/*
+PURPOSE
+-------
+This section documents all implicit foreign-key relationships between landing
+tables. The landing schema has no enforced FKs (data is loaded as-is from
+Excel/CSV sources), but these logical relationships are critical for:
+  - ETL join logic (landing -> staging)
+  - Data quality validation
+  - Understanding the fleet management domain model
+
+TABLE CLASSIFICATION
+--------------------
+Hub / Master Tables (central entities):
+  CCOB  - Vehicles (Objects)           33,374 rows
+  CCCP  - Contract Positions           33,652 rows
+  CCCU  - Customers (Clients)           2,387 rows
+
+Reference / Lookup Tables:
+  CCAU  - Automobile Catalog (Make/Model)  9,357 rows
+  CCRS  - Representatives                     44 rows
+
+Transactional / Detail Tables:
+  CCBI  - Billing                       22,934 rows
+  CCCA  - Fuel Cards                     8,219 rows
+  CCCO  - Contract Options               2,945 rows
+  CCDA  - Damages                            0 rows
+  CCDR  - Drivers                       33,633 rows
+  CCFP  - Fleet Positions              16,255 rows
+  CCGD  - Maintenance/Service History  402,428 rows
+  CCGR  - Client Groups                 1,961 rows
+  CCIN  - Insurance                         42 rows
+  CCOBCP- Object-Contract Link         66,792 rows
+  CCOR  - Orders                        33,418 rows
+  CCOS  - Object Sales/Returns         25,661 rows
+  CCPC  - Profit Centres                3,863 rows
+  CCXC  - Accessories                  42,858 rows
+
+Financial Snapshot Tables:
+  CCFC  - Financial Conditions (auto catalog variant)  9,357 rows
+  CCFID - Financial ID variant                         9,357 rows
+  CCFIH - Financial History variant                    9,357 rows
+  CCFIM - Financial Model variant                      9,357 rows
+  CCIO  - Insurance Options (auto catalog variant)     9,357 rows
+
+Country-Wide (CW*) Supplement Tables:
+  CW* tables carry additional country-specific fields for the corresponding
+  CC* table. They share the same key columns (Object_Number, Customer_Number,
+  etc.) and mirror the CC* relationships at country level.
+
+RELATIONSHIP MAP
+----------------
+All relationships are Many-to-One unless otherwise noted.
+
+Source Table   Source Column                           Target Table   Target Column                         Description
+-------------- -------------------------------------- -------------- ------------------------------------- ------------------------------------------
+CCBI           CCBI_BIOBNO_Object_Number              CCOB           CCOB_OBOBNO_Object_Number             Billing -> Vehicle
+CCCA           CCCA_CACAOB (Object ref)               CCOB           CCOB_OBOBNO_Object_Number             Fuel Card -> Vehicle
+CCCA           CCCA_CACADR (Driver ref)                CCDR           CCDR_DRDRNO_Driver_Number             Fuel Card -> Driver
+CCCO           CCCO_COCUNO_Customer_Number             CCCU           CCCU_CUNULO_Client_Number             Contract Option -> Customer
+CCCO           CCCO_COCONO_Contract_Number             CCOB           CCOB_OBCONO_Contract_Number           Contract Option -> Contract (via vehicle)
+CCCP           CCCP_CPCUNO_Customer_Number             CCCU           CCCU_CUNULO_Client_Number             Contract Position -> Customer
+CCCP           CCCP_CPMKCD_Make_Code                   CCAU           CCAU_AUMKCD_Make_Code                 Contract -> Make lookup
+CCCP           CCCP_CPMDCD_Model_Code                  CCAU           CCAU_AUMDCD_Model_Code                Contract -> Model lookup (composite w/ Make)
+CCDA           CCDA_DAOBNO_Object_Number               CCOB           CCOB_OBOBNO_Object_Number             Damage -> Vehicle
+CCDA           CCDA_DADADR_Driver_Number               CCDR           CCDR_DRDRNO_Driver_Number             Damage -> Driver
+CCDR           CCDR_DROBNO_Object_Number               CCOB           CCOB_OBOBNO_Object_Number             Driver -> Vehicle (current assignment)
+CCFP           CCFP_FPOBNO_Object_Number               CCOB           CCOB_OBOBNO_Object_Number             Fleet Position -> Vehicle
+CCFP           CCFP_FPCUNO_Customer_Number             CCCU           CCCU_CUNULO_Client_Number             Fleet Position -> Customer
+CCFP           CCFP_FPCPNO_Calculation_Number          CCCP           CCCP_CPCPNO_Contract_Position_Number  Fleet Position -> Contract Position
+CCFP           CCFP_FPCONO_Contract_Number             CCCP           CCCP_CPCONO_Contract_Number           Fleet Position -> Contract
+CCFP           CCFP_FPDRNO_Driver_Number               CCDR           CCDR_DRDRNO_Driver_Number             Fleet Position -> Driver
+CCGD           CCGD_MAOBNO_Object_Number               CCOB           CCOB_OBOBNO_Object_Number             Maintenance -> Vehicle
+CCGD           CCGD_MANUFO_Supplier_Number             CCGR           CCGR_GRGNLO_Client_Group_Number       Maintenance -> Supplier/Group (soft ref)
+CCGR           CCGR_GRNKLO_Sub_Branch_Code             CCCU           CCCU_CUNKLO_Sub_Branch_Code           Group -> Customer (branch-level link)
+CCIN           CCIN_INOBNO_Object_Number               CCOB           CCOB_OBOBNO_Object_Number             Insurance -> Vehicle
+CCOB           CCOB_OBCUNO_Customer_Number             CCCU           CCCU_CUNULO_Client_Number             Vehicle -> Customer (lessee)
+CCOB           CCOB_OBCONO_Contract_Number             CCCP           CCCP_CPCONO_Contract_Number           Vehicle -> Contract
+CCOB           CCOB_OBCPNO_Calculation_Number          CCCP           CCCP_CPCPNO_Contract_Position_Number  Vehicle -> Calculation/Contract Position
+CCOB           CCOB_OBMKCD_Make_Code                   CCAU           CCAU_AUMKCD_Make_Code                 Vehicle -> Make lookup
+CCOB           CCOB_OBMDCD_Model_Code                  CCAU           CCAU_AUMDCD_Model_Code                Vehicle -> Model lookup (composite w/ Make)
+CCOB           CCOB_OBGRNO_Client_Group_Number         CCCU           CCCU_CUGNLO_Client_Group_Number       Vehicle -> Client Group
+CCOB           CCOB_OBORNO_Order_Number                CCOR           CCOR_ORORNO_Order_Number              Vehicle -> Order
+CCOBCP         CCOBCP_WVOBNO (Object Number)           CCOB           CCOB_OBOBNO_Object_Number             Object-Contract link -> Vehicle
+CCOBCP         CCOBCP_WVCPNO (Calculation Number)      CCCP           CCCP_CPCPNO_Contract_Position_Number  Object-Contract link -> Contract Position
+CCOR           CCOR_ORCUNO_Customer_Number             CCCU           CCCU_CUNULO_Client_Number             Order -> Customer
+CCOR           CCOR_ORCPNO_Calculation_Number          CCCP           CCCP_CPCPNO_Contract_Position_Number  Order -> Contract Position
+CCOS           CCOS_OSOBNO_Object_Number               CCOB           CCOB_OBOBNO_Object_Number             Object Sales -> Vehicle
+CCPC           CCPC_PCCUNO_Customer_Number             CCCU           CCCU_CUNULO_Client_Number             Profit Centre -> Customer
+CCXC           CCXC_XCCPNO_Calculation_Number          CCCP           CCCP_CPCPNO_Contract_Position_Number  Accessory -> Contract Position
+
+DERIVED / COMPUTED FIELDS
+-------------------------
+  Expected Termination Date:
+    Computed in staging and semantic layers as:
+      expected_end_date = date(CCOB_Start_Date, '+' || CCCP_CPCPDU_Duration || ' months')
+    Source columns: CCOB_OBOBBC/BY/BM/BD (start date parts) + CCCP_CPCPDU_Contract_Duration_Months
+    Also available from: CCOB_OBFSDU_Budgeted_Months on the vehicle object itself
+  Months Driven:
+    months_driven = months between start_date and current date
+  Months Remaining:
+    months_remaining = months between current date and expected_end_date
+    Negative values indicate contract is past expected termination.
+
+NOTE ON COMPOSITE KEYS
+----------------------
+  - CCAU (Automobile Catalog) uses a composite key: (AUMKCD_Make_Code, AUMDCD_Model_Code).
+    Tables referencing make/model (CCOB, CCCP) should join on BOTH columns.
+  - CCOBCP links objects to contract positions and may have multiple rows
+    per object (one per contract position type: WVTYCP).
+  - CCDR is keyed by (DROBNO_Object_Number, DRDRNO_Driver_Number); a vehicle
+    can have multiple driver records over time.
+
+CW* (COUNTRY-WIDE) TABLE RELATIONSHIPS
+---------------------------------------
+Each CW* table supplements its CC* counterpart with country-specific data.
+They share the same key columns and mirror the CC* relationships:
+
+  CWAU  -> mirrors CCAU  (Make_Code, Model_Code)
+  CWBI  -> mirrors CCBI  (Object_Number)
+  CWCO  -> mirrors CCCO  (Customer_Number, Contract_Number)
+  CWCP  -> mirrors CCCP  (Calculation_Number)
+  CWCU  -> mirrors CCCU  (Customer_Number)
+  CWDR  -> mirrors CCDR  (Object_Number)
+  CWGR  -> mirrors CCGR  (Group_Number via WGNGLO)
+  CWOA  -> supplements   (Customer_Number, Object_Begin_Year)
+  CWOB  -> mirrors CCOB  (Object_Number, Customer_Number, Profit_Centre)
+  CWOR  -> mirrors CCOR  (Object_Number via WKOBNO)
+  CWPC  -> mirrors CCPC  (Customer_Number, Profit_Centre)
+  CWPO  -> supplements   (Customer_Number, Order_Number, Calculation_Number)
+
+ENTITY-RELATIONSHIP SUMMARY (hub-centric view)
+-----------------------------------------------
+
+  CCCU (Customer)
+    |<-- CCOB.OBCUNO      (vehicles leased to this customer)
+    |<-- CCCP.CPCUNO      (contract positions for this customer)
+    |<-- CCCO.COCUNO      (contract options)
+    |<-- CCOR.ORCUNO      (orders placed by this customer)
+    |<-- CCPC.PCCUNO      (profit centres)
+    |<-- CCFP.FPCUNO      (fleet positions)
+    |<-- CCGR.GRNKLO      (groups/branches)
+
+  CCOB (Vehicle/Object)
+    |<-- CCBI.BIOBNO      (billing records)
+    |<-- CCCA.CACAOB      (fuel cards assigned)
+    |<-- CCDA.DAOBNO      (damage records)
+    |<-- CCDR.DROBNO      (driver assignments)
+    |<-- CCFP.FPOBNO      (fleet positions)
+    |<-- CCGD.MAOBNO      (maintenance/service stops)
+    |<-- CCIN.INOBNO      (insurance records)
+    |<-- CCOBCP.WVOBNO    (contract position links)
+    |<-- CCOS.OSOBNO      (sales/return records)
+    |--> CCCU.CUNULO      (owning customer, via OBCUNO)
+    |--> CCCP.CPCONO      (active contract, via OBCONO)
+    |--> CCAU              (make/model, via OBMKCD+OBMDCD)
+    |--> CCOR.ORORNO      (originating order, via OBORNO)
+
+  CCCP (Contract Position)
+    |<-- CCOB.OBCPNO      (vehicles on this contract position)
+    |<-- CCOBCP.WVCPNO    (object-contract links)
+    |<-- CCOR.ORCPNO      (orders referencing this position)
+    |<-- CCXC.XCCPNO      (accessories on this contract)
+    |<-- CCFP.FPCPNO      (fleet positions)
+    |--> CCCU.CUNULO      (customer, via CPCUNO)
+    |--> CCAU              (make/model, via CPMKCD+CPMDCD)
+
+VERIFIED AGAINST
+----------------
+  - ETL script: database/scripts/etl_landing_to_staging.py
+    (all JOIN keys confirmed in load_vehicles, load_contracts, load_orders,
+     load_billing, load_groups, load_odometer_history, load_damages)
+  - Staging FKs: database/schemas/02_staging.sql
+    (staging FK constraints match the logical relationships above)
+*/
+
+-- ============================================================================
+-- Additional Landing Tables (New Source Files)
+-- ============================================================================
+
+-- Table: CCDT
+-- Source: ccdt.xlsx
+-- Domain Translations (Reference)
+CREATE TABLE [landing].[CCDT] (
+    -- Metadata columns for CDC
+    [extraction_id] BIGINT IDENTITY(1,1),
+    [extraction_timestamp] DATETIME2 DEFAULT GETUTCDATE(),
+    -- [row_hash] computed column omitted for brevity
+
+    -- Source columns with documented names
+    [CCDT_DTCYCD_Country_Code] VARCHAR(10) NULL,
+    [CCDT_DTDMID_Domain_ID] INT NULL,
+    [CCDT_DTDMVA_Domain_Value] VARCHAR(50) NULL,
+    [CCDT_DTDMLN_Language_Code] VARCHAR(10) NULL,
+    [CCDT_DTDMTX_Domain_Text] VARCHAR(200) NULL,
+
+    CONSTRAINT [PK_landing_CCDT] PRIMARY KEY ([extraction_id])
+);
+
+CREATE INDEX [IX_landing_CCDT_timestamp] ON [landing].[CCDT]([extraction_timestamp]);
+GO
+
+-- Table: CCES
+-- Source: cces.xlsx
+-- Exploitation Services (Transactional)
+CREATE TABLE [landing].[CCES] (
+    -- Metadata columns for CDC
+    [extraction_id] BIGINT IDENTITY(1,1),
+    [extraction_timestamp] DATETIME2 DEFAULT GETUTCDATE(),
+    -- [row_hash] computed column omitted for brevity
+
+    -- Source columns with documented names
+    [CCES_ESCUNO_Customer_No] INT NULL,
+    [CCES_ESPCNO_Contract_Position_No] INT NULL,
+    [CCES_ESOBNO_Object_No] INT NULL,
+    [CCES_ESESSQ_Service_Sequence] INT NULL,
+    [CCES_ESESCD_Service_Code] INT NULL,
+    [CCES_ESESCT_Service_Cost_Total] DECIMAL(15,2) NULL,
+    [CCES_ESESIV_Service_Invoice] DECIMAL(15,2) NULL,
+    [CCES_ESIVSU_Invoice_Supplier] DECIMAL(15,2) NULL,
+    [CCES_ESTMCT_Total_Monthly_Cost] DECIMAL(15,2) NULL,
+    [CCES_ESTMIV_Total_Monthly_Invoice] DECIMAL(15,2) NULL,
+    [CCES_ESLPCD_LP_Code] VARCHAR(10) NULL,
+    [CCES_ESRPPD_Reporting_Period] INT NULL,
+    [CCES_ESCOUC_Country_Code] VARCHAR(10) NULL,
+    [CCES_ESVOLC_Volume_Code] VARCHAR(10) NULL,
+    [CCES_ESDISC_Distance_Code] VARCHAR(10) NULL,
+    [CCES_ESCONC_Consumption_Code] VARCHAR(10) NULL,
+    [CCES_ESCURC_Currency_Code] VARCHAR(10) NULL,
+
+    CONSTRAINT [PK_landing_CCES] PRIMARY KEY ([extraction_id])
+);
+
+CREATE INDEX [IX_landing_CCES_timestamp] ON [landing].[CCES]([extraction_timestamp]);
+GO
+
+-- Table: CCMS
+-- Source: ccms.xlsx
+-- Maintenance Approvals (Transactional)
+CREATE TABLE [landing].[CCMS] (
+    -- Metadata columns for CDC
+    [extraction_id] BIGINT IDENTITY(1,1),
+    [extraction_timestamp] DATETIME2 DEFAULT GETUTCDATE(),
+    -- [row_hash] computed column omitted for brevity
+
+    -- Source columns with documented names
+    [CCMS_MSOBNO_Object_No] INT NULL,
+    [CCMS_MSGDSQ_Sequence] INT NULL,
+    [CCMS_MSGDCC_Date_Century] INT NULL,
+    [CCMS_MSGDYY_Date_Year] INT NULL,
+    [CCMS_MSGDMM_Date_Month] INT NULL,
+    [CCMS_MSGDDD_Date_Day] INT NULL,
+    [CCMS_MSGDKM_Mileage_Km] DECIMAL(15,2) NULL,
+    [CCMS_MSGDAM_Amount] DECIMAL(15,2) NULL,
+    [CCMS_MSGDDS_Description] VARCHAR(200) NULL,
+    [CCMS_MSGDD2_Description_2] VARCHAR(200) NULL,
+    [CCMS_MSGDD3_Description_3] VARCHAR(200) NULL,
+    [CCMS_MSGDSC_Source_Code] VARCHAR(10) NULL,
+    [CCMS_MSMSTY_Maintenance_Type] INT NULL,
+    [CCMS_MSNUFO_Supplier_No] INT NULL,
+    [CCMS_MSNAFO_Supplier_Branch] VARCHAR(50) NULL,
+    [CCMS_MSMJCD_Major_Code] VARCHAR(10) NULL,
+    [CCMS_MSMNCD_Minor_Code] VARCHAR(10) NULL,
+    [CCMS_MSRPPD_Reporting_Period] INT NULL,
+    [CCMS_MSCOUC_Country_Code] VARCHAR(10) NULL,
+    [CCMS_MSVOLC_Volume_Code] VARCHAR(10) NULL,
+    [CCMS_MSDISC_Distance_Code] VARCHAR(10) NULL,
+    [CCMS_MSCONC_Consumption_Code] VARCHAR(10) NULL,
+    [CCMS_MSCURC_Currency_Code] VARCHAR(10) NULL,
+    [CCMS_MSSIRN_SI_Run_No] INT NULL,
+    [CCMS_MSDAFC_Approval_Date_Century] INT NULL,
+    [CCMS_MSDAFY_Approval_Date_Year] INT NULL,
+    [CCMS_MSDAFM_Approval_Date_Month] INT NULL,
+    [CCMS_MSDAFD_Approval_Date_Day] INT NULL,
+
+    CONSTRAINT [PK_landing_CCMS] PRIMARY KEY ([extraction_id])
+);
+
+CREATE INDEX [IX_landing_CCMS_timestamp] ON [landing].[CCMS]([extraction_timestamp]);
+GO
+
+-- Table: CCPI
+-- Source: ccpi.xlsx
+-- Passed On Invoices (Financial)
+CREATE TABLE [landing].[CCPI] (
+    -- Metadata columns for CDC
+    [extraction_id] BIGINT IDENTITY(1,1),
+    [extraction_timestamp] DATETIME2 DEFAULT GETUTCDATE(),
+    -- [row_hash] computed column omitted for brevity
+
+    -- Source columns with documented names
+    [CCPI_PICONO_Contract_No] INT NULL,
+    [CCPI_PICUNO_Customer_No] INT NULL,
+    [CCPI_PINACD_Name_Code] VARCHAR(50) NULL,
+    [CCPI_PIOBNO_Object_No] INT NULL,
+    [CCPI_PIPCNO_Contract_Position_No] INT NULL,
+    [CCPI_PIPIAM_Amount] DECIMAL(15,2) NULL,
+    [CCPI_PIPICD_Cost_Code] DECIMAL(15,2) NULL,
+    [CCPI_PIEBRP_EB_Reporting_Period] DECIMAL(15,2) NULL,
+    [CCPI_PIPIDR_Driver_No] DECIMAL(15,2) NULL,
+    [CCPI_PIPIDS_Description] VARCHAR(200) NULL,
+    [CCPI_PIPIGR_Gross_Net] VARCHAR(10) NULL,
+    [CCPI_PIPIIV_Invoice_No] DECIMAL(15,2) NULL,
+    [CCPI_PIPILP_LP_Code] VARCHAR(10) NULL,
+    [CCPI_PIPIOB_Object_Bridge] DECIMAL(15,2) NULL,
+    [CCPI_PIPIOR_Origin_Code] VARCHAR(10) NULL,
+    [CCPI_PIPIRN_Run_No] DECIMAL(15,2) NULL,
+    [CCPI_PIPISC_Source_Code] VARCHAR(10) NULL,
+    [CCPI_PIPIVT_VAT_Type] VARCHAR(10) NULL,
+    [CCPI_PIRPPD_Reporting_Period] INT NULL,
+    [CCPI_PICOUC_Country_Code] VARCHAR(10) NULL,
+
+    CONSTRAINT [PK_landing_CCPI] PRIMARY KEY ([extraction_id])
+);
+
+CREATE INDEX [IX_landing_CCPI_timestamp] ON [landing].[CCPI]([extraction_timestamp]);
+GO
+
+-- Table: CCRC
+-- Source: ccrc.xlsx
+-- Replacement Cars (Transactional)
+CREATE TABLE [landing].[CCRC] (
+    -- Metadata columns for CDC
+    [extraction_id] BIGINT IDENTITY(1,1),
+    [extraction_timestamp] DATETIME2 DEFAULT GETUTCDATE(),
+    -- [row_hash] computed column omitted for brevity
+
+    -- Source columns with documented names
+    [CCRC_RCOBNO_Object_No] INT NULL,
+    [CCRC_RCRCNO_RC_No] INT NULL,
+    [CCRC_RCRCSQ_Sequence] VARCHAR(10) NULL,
+    [CCRC_RCDRNO_Driver_No] DECIMAL(15,2) NULL,
+    [CCRC_RCRCRN_RC_Run_No] DECIMAL(15,2) NULL,
+    [CCRC_RCRCBC_Begin_Date_Century] INT NULL,
+    [CCRC_RCRCBY_Begin_Date_Year] INT NULL,
+    [CCRC_RCRCBM_Begin_Date_Month] INT NULL,
+    [CCRC_RCRCBD_Begin_Date_Day] INT NULL,
+    [CCRC_RCRCEC_End_Date_Century] INT NULL,
+    [CCRC_RCRCEY_End_Date_Year] INT NULL,
+    [CCRC_RCRCEM_End_Date_Month] INT NULL,
+    [CCRC_RCRCED_End_Date_Day] INT NULL,
+    [CCRC_RCRCCD_RC_Code] VARCHAR(10) NULL,
+    [CCRC_RCRCKM_Km] DECIMAL(15,2) NULL,
+    [CCRC_RCRCAM_Amount] DECIMAL(15,2) NULL,
+    [CCRC_RCRCRS_Reason] VARCHAR(200) NULL,
+    [CCRC_RCRCDS_Description] VARCHAR(200) NULL,
+    [CCRC_RCRCD2_Description_2] VARCHAR(200) NULL,
+    [CCRC_RCRCD3_Description_3] VARCHAR(200) NULL,
+    [CCRC_RCRCTY_Type] VARCHAR(10) NULL,
+    [CCRC_RCRCDR_Driver_Name] VARCHAR(100) NULL,
+    [CCRC_RCRCSC_Source_Code] VARCHAR(10) NULL,
+    [CCRC_RCRPPD_Reporting_Period] INT NULL,
+    [CCRC_RCCOUC_Country_Code] VARCHAR(10) NULL,
+
+    CONSTRAINT [PK_landing_CCRC] PRIMARY KEY ([extraction_id])
+);
+
+CREATE INDEX [IX_landing_CCRC_timestamp] ON [landing].[CCRC]([extraction_timestamp]);
+GO
+
+-- Table: CCRP
+-- Source: ccrp.xlsx
+-- Reporting Periods (Reference)
+CREATE TABLE [landing].[CCRP] (
+    -- Metadata columns for CDC
+    [extraction_id] BIGINT IDENTITY(1,1),
+    [extraction_timestamp] DATETIME2 DEFAULT GETUTCDATE(),
+    -- [row_hash] computed column omitted for brevity
+
+    -- Source columns with documented names
+    [CCRP_RPRPCC_Period_CC] DECIMAL(15,2) NULL,
+    [CCRP_RPRPYY_Period_YY] DECIMAL(15,2) NULL,
+    [CCRP_RPRPMM_Period_MM] DECIMAL(15,2) NULL,
+    [CCRP_RPRPDD_Period_DD] DECIMAL(15,2) NULL,
+    [CCRP_RPRPPD_Reporting_Period] DECIMAL(15,2) NULL,
+    [CCRP_RPMTPD_Month_Period] DECIMAL(15,2) NULL,
+
+    CONSTRAINT [PK_landing_CCRP] PRIMARY KEY ([extraction_id])
+);
+
+CREATE INDEX [IX_landing_CCRP_timestamp] ON [landing].[CCRP]([extraction_timestamp]);
+GO
+
+-- Table: CCSU
+-- Source: ccsu.xlsx
+-- Suppliers (Reference/Master)
+CREATE TABLE [landing].[CCSU] (
+    -- Metadata columns for CDC
+    [extraction_id] BIGINT IDENTITY(1,1),
+    [extraction_timestamp] DATETIME2 DEFAULT GETUTCDATE(),
+    -- [row_hash] computed column omitted for brevity
+
+    -- Source columns with documented names
+    [CCSU_SUNUFO_Supplier_No] INT NULL,
+    [CCSU_SUNAFO_Branch_No] VARCHAR(50) NULL,
+    [CCSU_SUNOFO_Supplier_Name] VARCHAR(200) NULL,
+    [CCSU_SUNOF2_Name_Line_2] VARCHAR(200) NULL,
+    [CCSU_SUNOF3_Name_Line_3] VARCHAR(200) NULL,
+    [CCSU_SUCLFO_Class] VARCHAR(10) NULL,
+    [CCSU_SUCPFO_Country_Code] VARCHAR(10) NULL,
+    [CCSU_SUADFO_Address] VARCHAR(200) NULL,
+    [CCSU_SULOFO_City] VARCHAR(100) NULL,
+    [CCSU_SUCAFO_Category] VARCHAR(50) NULL,
+    [CCSU_SUNTFO_Phone] VARCHAR(50) NULL,
+    [CCSU_SUNFFO_Fax] VARCHAR(50) NULL,
+    [CCSU_SUNEFO_Email] VARCHAR(100) NULL,
+    [CCSU_SUCTFO_Contact_Person] VARCHAR(100) NULL,
+    [CCSU_SURSFO_Responsible_Person] VARCHAR(100) NULL,
+    [CCSU_SURPPD_Reporting_Period] DECIMAL(15,2) NULL,
+    [CCSU_SUCOUC_Country] VARCHAR(10) NULL,
+
+    CONSTRAINT [PK_landing_CCSU] PRIMARY KEY ([extraction_id])
+);
+
+CREATE INDEX [IX_landing_CCSU_timestamp] ON [landing].[CCSU]([extraction_timestamp]);
+GO
+
+-- Table: CCCR
+-- Source: cccr.xlsx
+-- Car Reports (Monthly Vehicle Snapshot)
+CREATE TABLE [landing].[CCCR] (
+    -- Metadata columns for CDC
+    [extraction_id] BIGINT IDENTITY(1,1),
+    [extraction_timestamp] DATETIME2 DEFAULT GETUTCDATE(),
+    -- [row_hash] computed column omitted for brevity
+    -- Key columns for hash: CROBNO, CRFUCT, CRMACT, CRRCCT, CRTOCT, CRFSKM, CRRPPD
+
+    -- Source columns with documented names
+    [CCCR_CROBNO_Object_No] INT NULL,
+    [CCCR_CRBEAM_Book_Value_Begin_Amount] DECIMAL(15,2) NULL,
+    [CCCR_CRBELT_Book_Value_Begin_LT] DECIMAL(15,2) NULL,
+    [CCCR_CRDIAM_Disinvestment_Amount] DECIMAL(15,2) NULL,
+    [CCCR_CRDILT_Disinvestment_LT] DECIMAL(15,2) NULL,
+    [CCCR_CRGAAM_Gain_Amount] DECIMAL(15,2) NULL,
+    [CCCR_CRGALT_Gain_LT] DECIMAL(15,2) NULL,
+    [CCCR_CRFSBV_First_Start_Book_Value] DECIMAL(15,2) NULL,
+    [CCCR_CRFSIR_First_Start_Interest_Rate] DECIMAL(15,2) NULL,
+    [CCCR_CRFUCT_Fuel_Cost_Total] DECIMAL(15,2) NULL,
+    [CCCR_CRMACT_Maintenance_Cost_Total] DECIMAL(15,2) NULL,
+    [CCCR_CRRCCT_Replacement_Car_Cost_Total] DECIMAL(15,2) NULL,
+    [CCCR_CRTRCT_Tyre_Cost_Total] DECIMAL(15,2) NULL,
+    [CCCR_CRFUIV_Fuel_Invoice_Total] DECIMAL(15,2) NULL,
+    [CCCR_CRMAIV_Maintenance_Invoice_Total] DECIMAL(15,2) NULL,
+    [CCCR_CRRCIV_Replacement_Car_Invoice_Total] DECIMAL(15,2) NULL,
+    [CCCR_CRTRIV_Tyre_Invoice_Total] DECIMAL(15,2) NULL,
+    [CCCR_CRFSKM_First_Start_Km] INT NULL,
+    [CCCR_CRKMCC_Odometer_Date_Century] INT NULL,
+    [CCCR_CRKMYY_Odometer_Date_Year] INT NULL,
+    [CCCR_CRKMMM_Odometer_Date_Month] INT NULL,
+    [CCCR_CRKMDD_Odometer_Date_Day] INT NULL,
+    [CCCR_CRFSIK_First_Start_Initial_Km] INT NULL,
+    [CCCR_CRKMDR_Km_Driven] DECIMAL(15,2) NULL,
+    [CCCR_CRMMDR_Monthly_Km_Driven] DECIMAL(15,2) NULL,
+    [CCCR_CRKMTE_Km_Technical] DECIMAL(15,2) NULL,
+    [CCCR_CRFUCK_Fuel_Cost_Per_Km] DECIMAL(15,2) NULL,
+    [CCCR_CRFUIK_Fuel_Invoice_Per_Km] DECIMAL(15,2) NULL,
+    [CCCR_CRRECO_Fuel_Consumption] DECIMAL(15,2) NULL,
+    [CCCR_CRFUSL_Fuel_Slope] DECIMAL(15,2) NULL,
+    [CCCR_CRFUMD_Fuel_Monthly_Deviation] DECIMAL(15,2) NULL,
+    [CCCR_CRMACK_Maintenance_Cost_Per_Km] DECIMAL(15,2) NULL,
+    [CCCR_CRMAIK_Maintenance_Invoice_Per_Km] DECIMAL(15,2) NULL,
+    [CCCR_CRMASL_Maintenance_Slope] DECIMAL(15,2) NULL,
+    [CCCR_CRMAMD_Maintenance_Monthly_Deviation] DECIMAL(15,2) NULL,
+    [CCCR_CRRCCK_RC_Cost_Per_Km] DECIMAL(15,2) NULL,
+    [CCCR_CRRCIK_RC_Invoice_Per_Km] DECIMAL(15,2) NULL,
+    [CCCR_CRRCSL_RC_Slope] DECIMAL(15,2) NULL,
+    [CCCR_CRRCMD_RC_Monthly_Deviation] DECIMAL(15,2) NULL,
+    [CCCR_CRRCKM_RC_Km] DECIMAL(15,2) NULL,
+    [CCCR_CRRCAM_RC_Amount] DECIMAL(15,2) NULL,
+    [CCCR_CRTRCK_Tyre_Cost_Per_Km] DECIMAL(15,2) NULL,
+    [CCCR_CRTRIK_Tyre_Invoice_Per_Km] DECIMAL(15,2) NULL,
+    [CCCR_CRTRSL_Tyre_Slope] DECIMAL(15,2) NULL,
+    [CCCR_CRTRMD_Tyre_Monthly_Deviation] DECIMAL(15,2) NULL,
+    [CCCR_CRTOCT_Total_Cost] DECIMAL(15,2) NULL,
+    [CCCR_CRTOIV_Total_Invoiced] DECIMAL(15,2) NULL,
+    [CCCR_CRCTKM_Cost_Per_Km] DECIMAL(15,2) NULL,
+    [CCCR_CRTOSU_Total_Surplus] DECIMAL(15,2) NULL,
+    [CCCR_CRTOSA_Total_Surplus_Absolute] DECIMAL(15,2) NULL,
+    [CCCR_CRTOTO_Total_Total] DECIMAL(15,2) NULL,
+    [CCCR_CRLWKM_Last_Week_Km] DECIMAL(15,2) NULL,
+    [CCCR_CRUPKM_Update_Km] DECIMAL(15,2) NULL,
+    [CCCR_CRMANR_Maintenance_Count] INT NULL,
+    [CCCR_CRFUNR_Fuel_Count] INT NULL,
+    [CCCR_CRRCNR_RC_Count] INT NULL,
+    [CCCR_CRTRNR_Tyre_Count] INT NULL,
+    [CCCR_CRTNNR_Tyre_New_Count] INT NULL,
+    [CCCR_CRTWNR_Tyre_Winter_Count] INT NULL,
+    [CCCR_CRPRKT_Private_Km_Pct] DECIMAL(15,2) NULL,
+    [CCCR_CRDANB_Damage_Count] INT NULL,
+    [CCCR_CRDARE_Damage_Reserve] DECIMAL(15,2) NULL,
+    [CCCR_CRSG01_Segment_01] DECIMAL(15,2) NULL,
+    [CCCR_CRSG02_Segment_02] DECIMAL(15,2) NULL,
+    [CCCR_CRSG03_Segment_03] DECIMAL(15,2) NULL,
+    [CCCR_CRSG04_Segment_04] DECIMAL(15,2) NULL,
+    [CCCR_CRSG05_Segment_05] DECIMAL(15,2) NULL,
+    [CCCR_CRSG06_Segment_06] DECIMAL(15,2) NULL,
+    [CCCR_CRSG07_Segment_07] DECIMAL(15,2) NULL,
+    [CCCR_CRSG08_Segment_08] DECIMAL(15,2) NULL,
+    [CCCR_CRSG09_Segment_09] DECIMAL(15,2) NULL,
+    [CCCR_CRSG10_Segment_10] DECIMAL(15,2) NULL,
+    [CCCR_CRSG11_Segment_11] DECIMAL(15,2) NULL,
+    [CCCR_CRSG12_Segment_12] DECIMAL(15,2) NULL,
+    [CCCR_CRSG13_Segment_13] DECIMAL(15,2) NULL,
+    [CCCR_CRSG14_Segment_14] DECIMAL(15,2) NULL,
+    [CCCR_CRSG15_Segment_15] DECIMAL(15,2) NULL,
+    [CCCR_CRRPPD_Reporting_Period] INT NULL,
+    [CCCR_CRCOUC_Country_Code] VARCHAR(10) NULL,
+    [CCCR_CRVOLC_Volume_Code] VARCHAR(10) NULL,
+    [CCCR_CRDISC_Distance_Code] VARCHAR(10) NULL,
+    [CCCR_CRCONC_Consumption_Code] VARCHAR(10) NULL,
+    [CCCR_CRCURC_Currency_Code] VARCHAR(10) NULL,
+    [CCCR_CRMIAM_Misc_Insurance_Amount] DECIMAL(15,2) NULL,
+    [CCCR_CRMIPY_Misc_Insurance_PerYear] DECIMAL(15,2) NULL,
+    [CCCR_CRMIRN_Misc_Insurance_Run_No] DECIMAL(15,2) NULL,
+    [CCCR_CRTSAM_Misc_TS_Amount] DECIMAL(15,2) NULL,
+    [CCCR_CRTSPY_Misc_TS_PerYear] DECIMAL(15,2) NULL,
+    [CCCR_CRTSRN_Misc_TS_Run_No] DECIMAL(15,2) NULL,
+    [CCCR_CRTRNO_Traffic_Fines_No] INT NULL,
+    [CCCR_CRPACT_Parking_Cost_Total] DECIMAL(15,2) NULL,
+    [CCCR_CRPAIV_Parking_Invoice_Total] DECIMAL(15,2) NULL,
+    [CCCR_CRPAMD_Parking_Monthly_Deviation] DECIMAL(15,2) NULL,
+    [CCCR_CRPASL_Parking_Slope] DECIMAL(15,2) NULL,
+    [CCCR_CRUNCT_Unspecified_Cost_Total] DECIMAL(15,2) NULL,
+    [CCCR_CRUNIV_Unspecified_Invoice_Total] DECIMAL(15,2) NULL,
+    [CCCR_CRUNMD_Unspecified_Monthly_Deviation] DECIMAL(15,2) NULL,
+    [CCCR_CRUNSL_Unspecified_Slope] DECIMAL(15,2) NULL,
+    [CCCR_CRWACT_Warranty_Cost_Total] DECIMAL(15,2) NULL,
+    [CCCR_CRWAIV_Warranty_Invoice_Total] DECIMAL(15,2) NULL,
+    [CCCR_CRWAMD_Warranty_Monthly_Deviation] DECIMAL(15,2) NULL,
+    [CCCR_CRWASL_Warranty_Slope] DECIMAL(15,2) NULL,
+
+    CONSTRAINT [PK_landing_CCCR] PRIMARY KEY ([extraction_id])
+);
+
+CREATE INDEX [IX_landing_CCCR_timestamp] ON [landing].[CCCR]([extraction_timestamp]);
+GO

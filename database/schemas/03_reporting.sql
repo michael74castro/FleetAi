@@ -587,6 +587,125 @@ LEFT JOIN reporting.dim_vendor vd ON fm.vendor_key = vd.vendor_key;
 GO
 
 -- =============================================
+-- ADDITIONAL DIMENSION TABLES
+-- =============================================
+
+-- Supplier Dimension (SCD Type 2)
+CREATE TABLE reporting.dim_supplier (
+    supplier_key INT IDENTITY(1,1) PRIMARY KEY,
+    supplier_no INT NOT NULL,
+    branch_no VARCHAR(50),
+    supplier_name VARCHAR(200),
+    name_line_2 VARCHAR(200),
+    name_line_3 VARCHAR(200),
+    class VARCHAR(10),
+    country_code VARCHAR(10),
+    address VARCHAR(200),
+    city VARCHAR(100),
+    category VARCHAR(50),
+    phone VARCHAR(50),
+    fax VARCHAR(50),
+    email VARCHAR(100),
+    contact_person VARCHAR(100),
+
+    -- SCD Type 2 tracking
+    effective_from DATE NOT NULL,
+    effective_to DATE,
+    is_current BIT DEFAULT 1
+);
+
+CREATE INDEX IX_dim_supplier_no ON reporting.dim_supplier(supplier_no);
+CREATE INDEX IX_dim_supplier_current ON reporting.dim_supplier(is_current) WHERE is_current = 1;
+CREATE INDEX IX_dim_supplier_name ON reporting.dim_supplier(supplier_name);
+
+-- =============================================
+-- ADDITIONAL FACT TABLES
+-- =============================================
+
+-- Maintenance Approvals Facts (transactional)
+CREATE TABLE reporting.fact_maintenance_approvals (
+    approval_fact_id BIGINT IDENTITY(1,1) PRIMARY KEY,
+    date_key INT,
+    vehicle_key INT,
+    supplier_key INT,
+    object_no INT NOT NULL,
+    approval_date DATE,
+    mileage_km DECIMAL(15,2),
+    amount DECIMAL(15,2),
+    description VARCHAR(600),
+    maintenance_type INT,
+    major_code VARCHAR(10),
+    minor_code VARCHAR(10),
+    source_code VARCHAR(10),
+    reporting_period INT,
+
+    CONSTRAINT FK_fact_ma_date FOREIGN KEY (date_key) REFERENCES reporting.dim_date(date_key),
+    CONSTRAINT FK_fact_ma_vehicle FOREIGN KEY (vehicle_key) REFERENCES reporting.dim_vehicle(vehicle_key),
+    CONSTRAINT FK_fact_ma_supplier FOREIGN KEY (supplier_key) REFERENCES reporting.dim_supplier(supplier_key)
+);
+
+CREATE INDEX IX_fact_ma_date ON reporting.fact_maintenance_approvals(date_key);
+CREATE INDEX IX_fact_ma_vehicle ON reporting.fact_maintenance_approvals(vehicle_key);
+CREATE INDEX IX_fact_ma_object ON reporting.fact_maintenance_approvals(object_no);
+CREATE INDEX IX_fact_ma_supplier ON reporting.fact_maintenance_approvals(supplier_key);
+
+-- Replacement Cars Facts (transactional)
+CREATE TABLE reporting.fact_replacement_cars (
+    rc_fact_id BIGINT IDENTITY(1,1) PRIMARY KEY,
+    begin_date_key INT,
+    end_date_key INT,
+    vehicle_key INT,
+    object_no INT NOT NULL,
+    rc_no INT,
+    begin_date DATE,
+    end_date DATE,
+    km DECIMAL(15,2),
+    amount DECIMAL(15,2),
+    reason VARCHAR(200),
+    rc_type VARCHAR(10),
+    reporting_period INT,
+
+    CONSTRAINT FK_fact_rc_begin_date FOREIGN KEY (begin_date_key) REFERENCES reporting.dim_date(date_key),
+    CONSTRAINT FK_fact_rc_end_date FOREIGN KEY (end_date_key) REFERENCES reporting.dim_date(date_key),
+    CONSTRAINT FK_fact_rc_vehicle FOREIGN KEY (vehicle_key) REFERENCES reporting.dim_vehicle(vehicle_key)
+);
+
+CREATE INDEX IX_fact_rc_begin_date ON reporting.fact_replacement_cars(begin_date_key);
+CREATE INDEX IX_fact_rc_end_date ON reporting.fact_replacement_cars(end_date_key);
+CREATE INDEX IX_fact_rc_vehicle ON reporting.fact_replacement_cars(vehicle_key);
+CREATE INDEX IX_fact_rc_object ON reporting.fact_replacement_cars(object_no);
+
+-- Car Reports Facts (periodic snapshot)
+CREATE TABLE reporting.fact_car_reports (
+    car_report_fact_id BIGINT IDENTITY(1,1) PRIMARY KEY,
+    vehicle_key INT,
+    object_no INT NOT NULL,
+    reporting_period INT,
+    fuel_cost_total DECIMAL(15,2),
+    maintenance_cost_total DECIMAL(15,2),
+    replacement_car_cost_total DECIMAL(15,2),
+    tyre_cost_total DECIMAL(15,2),
+    total_cost DECIMAL(15,2),
+    total_invoiced DECIMAL(15,2),
+    km_driven DECIMAL(15,2),
+    cost_per_km DECIMAL(15,4),
+    fuel_consumption DECIMAL(15,4),
+    maintenance_count INT,
+    fuel_count INT,
+    damage_count INT,
+    country_code VARCHAR(10),
+
+    CONSTRAINT FK_fact_cr_vehicle FOREIGN KEY (vehicle_key) REFERENCES reporting.dim_vehicle(vehicle_key)
+);
+
+CREATE INDEX IX_fact_cr_vehicle ON reporting.fact_car_reports(vehicle_key);
+CREATE INDEX IX_fact_cr_object ON reporting.fact_car_reports(object_no);
+CREATE INDEX IX_fact_cr_period ON reporting.fact_car_reports(reporting_period);
+CREATE INDEX IX_fact_cr_object_period ON reporting.fact_car_reports(object_no, reporting_period);
+
+GO
+
+-- =============================================
 -- STORED PROCEDURES FOR ETL
 -- =============================================
 

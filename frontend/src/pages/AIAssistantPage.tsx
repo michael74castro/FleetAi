@@ -13,7 +13,6 @@ export default function AIAssistantPage() {
     currentConversation,
     isSending,
     suggestions,
-    lastResponse,
     loadConversations,
     loadConversation,
     startNewConversation,
@@ -34,8 +33,19 @@ export default function AIAssistantPage() {
     }
   }, [conversationId, loadConversations, loadConversation, startNewConversation]);
 
+  // Auto-scroll to latest message/chart/table
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Check if the last message has data (charts/tables take longer to render)
+    const lastMessage = currentConversation?.messages[currentConversation.messages.length - 1];
+    const hasData = lastMessage?.metadata?.data && lastMessage.metadata.data.length > 0;
+
+    // Longer delay for messages with charts/tables
+    const delay = hasData ? 300 : 100;
+
+    const timer = setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }, delay);
+    return () => clearTimeout(timer);
   }, [currentConversation?.messages]);
 
   const handleSend = async () => {
@@ -171,38 +181,86 @@ export default function AIAssistantPage() {
               {currentConversation?.messages.map((message, index) => (
                 <div
                   key={message.message_id}
-                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}
+                  className="animate-fade-in"
                   style={{ animationDelay: `${index * 50}ms` }}
                 >
-                  <div className={`flex items-start space-x-3 max-w-[80%] ${message.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''}`}>
-                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
-                      message.role === 'user'
-                        ? 'bg-gradient-to-br from-brand-orange to-brand-amber'
-                        : 'bg-gradient-to-br from-brand-cyan/30 to-brand-cyan/20 border border-brand-cyan/30'
-                    }`}>
-                      {message.role === 'user' ? (
-                        <User className="h-4 w-4 text-white" />
-                      ) : (
-                        <Bot className="h-4 w-4 text-brand-cyan" />
-                      )}
-                    </div>
-                    <div
-                      className={`rounded-2xl px-5 py-3 ${
+                  {/* Message bubble */}
+                  <div className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`flex items-start space-x-3 max-w-[80%] ${message.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''}`}>
+                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
                         message.role === 'user'
-                          ? 'bg-gradient-to-r from-brand-orange to-brand-orange-light text-white'
-                          : 'glass border-brand-cyan/20'
-                      }`}
-                    >
-                      <p className="text-sm whitespace-pre-wrap text-white/90">
-                        {typeof message.content === 'string' ? message.content : JSON.stringify(message.content)}
-                      </p>
-                      {message.metadata && typeof message.metadata === 'object' && message.metadata.sql && (
-                        <pre className="mt-3 p-3 bg-black/30 rounded-xl text-xs overflow-x-auto border border-white/10">
-                          <code className="text-brand-cyan">{message.metadata.sql}</code>
-                        </pre>
-                      )}
+                          ? 'bg-gradient-to-br from-brand-orange to-brand-amber'
+                          : 'bg-gradient-to-br from-brand-cyan/30 to-brand-cyan/20 border border-brand-cyan/30'
+                      }`}>
+                        {message.role === 'user' ? (
+                          <User className="h-4 w-4 text-white" />
+                        ) : (
+                          <Bot className="h-4 w-4 text-brand-cyan" />
+                        )}
+                      </div>
+                      <div
+                        className={`rounded-2xl px-5 py-3 ${
+                          message.role === 'user'
+                            ? 'bg-gradient-to-r from-brand-orange to-brand-orange-light text-white'
+                            : 'glass border-brand-cyan/20'
+                        }`}
+                      >
+                        <p className="text-sm whitespace-pre-wrap text-white/90">
+                          {typeof message.content === 'string' ? message.content : JSON.stringify(message.content)}
+                        </p>
+                        {message.metadata && typeof message.metadata === 'object' && message.metadata.sql && (
+                          <pre className="mt-3 p-3 bg-black/30 rounded-xl text-xs overflow-x-auto border border-white/10">
+                            <code className="text-brand-cyan">{message.metadata.sql}</code>
+                          </pre>
+                        )}
+                      </div>
                     </div>
                   </div>
+
+                  {/* Chart visualization - full width below message */}
+                  {message.role === 'assistant' && message.metadata?.data && message.metadata.data.length > 0 && (() => {
+                    const chartConfig = message.metadata.chart_config ?? detectChartConfig(message.metadata.data);
+                    return chartConfig ? (
+                      <div className="mt-4 ml-12">
+                        <AIResponseChart data={message.metadata.data} chartConfig={chartConfig} />
+                      </div>
+                    ) : null;
+                  })()}
+
+                  {/* Data table - full width below chart */}
+                  {message.role === 'assistant' && message.metadata?.data && message.metadata.data.length > 0 && (
+                    <div className="mt-3 ml-12 max-h-64 overflow-auto glass-scrollbar">
+                      <div className="glass rounded-xl overflow-hidden">
+                        <table className="w-full text-xs">
+                          <thead className="bg-white/5 sticky top-0">
+                            <tr>
+                              {Object.keys(message.metadata.data[0]).map((key) => (
+                                <th key={key} className="px-4 py-2.5 text-left font-semibold text-white/70 uppercase tracking-wide">
+                                  {key.replace(/_/g, ' ')}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/5">
+                            {message.metadata.data.slice(0, 15).map((row, i) => (
+                              <tr key={i} className="hover:bg-white/5 transition-colors">
+                                {Object.values(row).map((val, j) => (
+                                  <td key={j} className="px-4 py-2 text-white/70">
+                                    {typeof val === 'number' ? val.toLocaleString() : String(val ?? '-')}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {message.metadata.data.length > 15 && (
+                        <p className="text-xs text-white/40 mt-2 text-center">
+                          Showing 15 of {message.metadata.data.length} rows
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
 
@@ -243,50 +301,6 @@ export default function AIAssistantPage() {
           </div>
         )}
 
-        {/* Chart visualization if available */}
-        {lastResponse?.data && lastResponse.data.length > 0 && (() => {
-          const chartConfig = lastResponse.chart_config ?? detectChartConfig(lastResponse.data);
-          return chartConfig ? (
-            <div className="px-6 py-3 border-t border-white/10">
-              <AIResponseChart data={lastResponse.data} chartConfig={chartConfig} />
-            </div>
-          ) : null;
-        })()}
-
-        {/* Data table if available */}
-        {lastResponse?.data && lastResponse.data.length > 0 && (
-          <div className="px-6 py-4 border-t border-white/10 max-h-52 overflow-auto glass-scrollbar">
-            <div className="glass rounded-xl overflow-hidden">
-              <table className="w-full text-xs">
-                <thead className="bg-white/5 sticky top-0">
-                  <tr>
-                    {Object.keys(lastResponse.data[0]).map((key) => (
-                      <th key={key} className="px-4 py-3 text-left font-semibold text-white/70 uppercase tracking-wide">
-                        {key}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {lastResponse.data.slice(0, 10).map((row, i) => (
-                    <tr key={i} className="hover:bg-white/5 transition-colors">
-                      {Object.values(row).map((val, j) => (
-                        <td key={j} className="px-4 py-2.5 text-white/70">
-                          {String(val ?? '-')}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {lastResponse.data.length > 10 && (
-              <p className="text-xs text-white/40 mt-2 text-center">
-                Showing 10 of {lastResponse.data.length} rows
-              </p>
-            )}
-          </div>
-        )}
 
         {/* Input */}
         <div className="border-t border-white/10 p-4">

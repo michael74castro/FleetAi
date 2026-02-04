@@ -100,6 +100,9 @@ CREATE TABLE IF NOT EXISTS staging_vehicles (
     lease_start_date TEXT,
     lease_end_date TEXT,
     lease_duration_months INTEGER,
+    expected_end_date TEXT,        -- Computed: date(lease_start_date, '+' || lease_duration_months || ' months')
+    months_driven INTEGER,         -- Computed: months between lease_start_date and current date
+    months_remaining INTEGER,      -- Computed: months between current date and expected_end_date
     lease_amount REAL,
     km_allowance INTEGER,
     km_budget INTEGER,
@@ -188,6 +191,8 @@ CREATE TABLE IF NOT EXISTS staging_contracts (
     -- Dates
     start_date TEXT,
     end_date TEXT,
+    months_driven INTEGER,         -- Computed: months between start_date and current date
+    months_remaining INTEGER,      -- Computed: months between current date and end_date
 
     status TEXT DEFAULT 'Active',
 
@@ -229,6 +234,7 @@ CREATE TABLE IF NOT EXISTS staging_orders (
                                 -- 7 = Delivery Phase - Generate lease schedule for invoicing
                                 -- 9 = Order cancelled
     order_status TEXT,
+    previous_object_no INTEGER,  -- Source: CCOR_ORPVOB - links to vehicle being replaced (for renewals)
     supplier_no INTEGER,
     supplier_amount REAL,
     report_period INTEGER,
@@ -357,6 +363,353 @@ CREATE TABLE IF NOT EXISTS staging_fuel_prices (
 
     UNIQUE(fuel_code, price_date)
 );
+
+-- =============================================
+-- Damage Domain
+-- =============================================
+
+CREATE TABLE IF NOT EXISTS staging_damages (
+    damage_id TEXT PRIMARY KEY,                 -- DADANO
+    object_no INTEGER NOT NULL,                 -- DAOBNO
+    driver_no INTEGER,                          -- DADADR
+    damage_date TEXT,                           -- parsed from DADACC/YY/MM/DD
+    description TEXT,                           -- concatenated DADADS+DAD2+DAD3+DAD4+DAD5
+    damage_amount REAL,                         -- DADAAM
+    accident_location_address TEXT,             -- DADAAD
+    accident_country_code TEXT,                 -- DADALA
+    mileage INTEGER,                            -- DADAMI
+    damage_type TEXT,                           -- DADATY
+    fault_code TEXT,                            -- DADAFF
+    damage_status_code TEXT,                    -- DADASC
+    damage_recourse TEXT,                       -- DASTCD
+    total_loss_code TEXT,                       -- DATOCD
+    country_code TEXT,                          -- DACOUC
+    reporting_period INTEGER,                   -- DARPPD
+    insurance_co_number INTEGER,                -- DAINCN
+    third_party_name TEXT,                      -- DATPNM
+    repair_days INTEGER,                        -- DAREPD
+    amount_own_risk REAL,                       -- DADAMO
+    amount_refunded REAL,                       -- DADAMR
+    claimed_deductible_repair REAL,             -- DADARP
+    refunded_deductible_repair REAL,            -- DARERP
+    salvage_amount REAL,                        -- DASALD
+    damage_fault_level TEXT,                    -- DADAFL
+    garage_name TEXT,                           -- DARSGA
+
+    source_hash TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_staging_damages_object ON staging_damages(object_no);
+CREATE INDEX IF NOT EXISTS idx_staging_damages_driver ON staging_damages(driver_no);
+CREATE INDEX IF NOT EXISTS idx_staging_damages_date ON staging_damages(damage_date);
+
+-- =============================================
+-- Domain Translations (Reference)
+-- =============================================
+
+CREATE TABLE IF NOT EXISTS staging_domain_translations (
+    translation_key INTEGER PRIMARY KEY AUTOINCREMENT,
+    country_code TEXT,
+    domain_id INTEGER,
+    domain_value TEXT,
+    language_code TEXT,
+    domain_text TEXT,
+    source_hash TEXT,
+    UNIQUE(country_code, domain_id, domain_value, language_code)
+);
+
+CREATE INDEX IF NOT EXISTS idx_staging_dt_domain ON staging_domain_translations(domain_id);
+
+-- =============================================
+-- Exploitation Services (Transactional)
+-- =============================================
+
+CREATE TABLE IF NOT EXISTS staging_exploitation_services (
+    service_key INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_no INTEGER,
+    contract_position_no INTEGER,
+    object_no INTEGER,
+    service_sequence INTEGER,
+    service_code INTEGER,
+    service_cost_total REAL,
+    service_invoice REAL,
+    invoice_supplier REAL,
+    total_monthly_cost REAL,
+    total_monthly_invoice REAL,
+    lp_code TEXT,
+    reporting_period INTEGER,
+    country_code TEXT,
+    volume_code TEXT,
+    distance_code TEXT,
+    consumption_code TEXT,
+    currency_code TEXT,
+    source_hash TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_staging_es_object ON staging_exploitation_services(object_no);
+CREATE INDEX IF NOT EXISTS idx_staging_es_customer ON staging_exploitation_services(customer_no);
+
+-- =============================================
+-- Maintenance Approvals (Transactional)
+-- =============================================
+
+CREATE TABLE IF NOT EXISTS staging_maintenance_approvals (
+    approval_key INTEGER PRIMARY KEY AUTOINCREMENT,
+    object_no INTEGER NOT NULL,
+    sequence INTEGER,
+    approval_date TEXT,
+    mileage_km REAL,
+    amount REAL,
+    description TEXT,
+    description_2 TEXT,
+    description_3 TEXT,
+    source_code TEXT,
+    maintenance_type INTEGER,
+    supplier_no INTEGER,
+    supplier_branch TEXT,
+    major_code TEXT,
+    minor_code TEXT,
+    reporting_period INTEGER,
+    country_code TEXT,
+    volume_code TEXT,
+    distance_code TEXT,
+    consumption_code TEXT,
+    currency_code TEXT,
+    si_run_no INTEGER,
+    date_from TEXT,
+    source_hash TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_staging_ma_object ON staging_maintenance_approvals(object_no);
+CREATE INDEX IF NOT EXISTS idx_staging_ma_supplier ON staging_maintenance_approvals(supplier_no);
+CREATE INDEX IF NOT EXISTS idx_staging_ma_date ON staging_maintenance_approvals(approval_date);
+
+-- =============================================
+-- Passed On Invoices (Financial)
+-- =============================================
+
+CREATE TABLE IF NOT EXISTS staging_passed_invoices (
+    invoice_key INTEGER PRIMARY KEY AUTOINCREMENT,
+    contract_no INTEGER,
+    customer_no INTEGER,
+    name_code TEXT,
+    object_no INTEGER,
+    contract_position_no INTEGER,
+    amount REAL,
+    cost_code REAL,
+    eb_reporting_period REAL,
+    driver_no REAL,
+    description TEXT,
+    gross_net TEXT,
+    invoice_no REAL,
+    lp_code TEXT,
+    object_bridge REAL,
+    origin_code TEXT,
+    run_no REAL,
+    source_code TEXT,
+    vat_type TEXT,
+    reporting_period INTEGER,
+    country_code TEXT,
+    source_hash TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_staging_pi_object ON staging_passed_invoices(object_no);
+CREATE INDEX IF NOT EXISTS idx_staging_pi_customer ON staging_passed_invoices(customer_no);
+
+-- =============================================
+-- Replacement Cars (Transactional)
+-- =============================================
+
+CREATE TABLE IF NOT EXISTS staging_replacement_cars (
+    rc_key INTEGER PRIMARY KEY AUTOINCREMENT,
+    object_no INTEGER NOT NULL,
+    rc_no INTEGER,
+    sequence TEXT,
+    driver_no REAL,
+    rc_run_no REAL,
+    begin_date TEXT,
+    end_date TEXT,
+    rc_code TEXT,
+    km REAL,
+    amount REAL,
+    reason TEXT,
+    description TEXT,
+    description_2 TEXT,
+    description_3 TEXT,
+    type TEXT,
+    driver_name TEXT,
+    source_code TEXT,
+    reporting_period INTEGER,
+    country_code TEXT,
+    source_hash TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_staging_rc_object ON staging_replacement_cars(object_no);
+CREATE INDEX IF NOT EXISTS idx_staging_rc_dates ON staging_replacement_cars(begin_date, end_date);
+
+-- =============================================
+-- Reporting Periods (Reference)
+-- =============================================
+
+CREATE TABLE IF NOT EXISTS staging_reporting_periods (
+    period_key INTEGER PRIMARY KEY AUTOINCREMENT,
+    period_cc REAL,
+    period_yy REAL,
+    period_mm REAL,
+    period_dd REAL,
+    reporting_period REAL,
+    month_period REAL,
+    reporting_date TEXT,
+    source_hash TEXT
+);
+
+-- =============================================
+-- Suppliers (Reference/Master)
+-- =============================================
+
+CREATE TABLE IF NOT EXISTS staging_suppliers (
+    supplier_key INTEGER PRIMARY KEY AUTOINCREMENT,
+    supplier_no INTEGER,
+    branch_no TEXT,
+    supplier_name TEXT,
+    name_line_2 TEXT,
+    name_line_3 TEXT,
+    class TEXT,
+    country_code TEXT,
+    address TEXT,
+    city TEXT,
+    category TEXT,
+    phone TEXT,
+    fax TEXT,
+    email TEXT,
+    contact_person TEXT,
+    responsible_person TEXT,
+    reporting_period REAL,
+    country TEXT,
+    source_hash TEXT,
+    UNIQUE(supplier_no, branch_no)
+);
+
+CREATE INDEX IF NOT EXISTS idx_staging_su_name ON staging_suppliers(supplier_name);
+
+-- =============================================
+-- Car Reports (Monthly Vehicle Snapshot)
+-- =============================================
+
+CREATE TABLE IF NOT EXISTS staging_car_reports (
+    report_key INTEGER PRIMARY KEY AUTOINCREMENT,
+    object_no INTEGER NOT NULL,
+    reporting_period INTEGER,
+    -- Book values
+    book_value_begin_amount REAL,
+    book_value_begin_lt REAL,
+    disinvestment_amount REAL,
+    disinvestment_lt REAL,
+    gain_amount REAL,
+    gain_lt REAL,
+    -- First start
+    first_start_book_value REAL,
+    first_start_interest_rate REAL,
+    -- Cost totals
+    fuel_cost_total REAL,
+    maintenance_cost_total REAL,
+    replacement_car_cost_total REAL,
+    tyre_cost_total REAL,
+    -- Invoice totals
+    fuel_invoice_total REAL,
+    maintenance_invoice_total REAL,
+    replacement_car_invoice_total REAL,
+    tyre_invoice_total REAL,
+    -- Mileage
+    first_start_km INTEGER,
+    odometer_date TEXT,
+    first_start_initial_km INTEGER,
+    km_driven REAL,
+    monthly_km_driven REAL,
+    km_technical REAL,
+    -- Fuel analysis
+    fuel_cost_per_km REAL,
+    fuel_invoice_per_km REAL,
+    fuel_consumption REAL,
+    fuel_slope REAL,
+    fuel_monthly_deviation REAL,
+    -- Maintenance analysis
+    maintenance_cost_per_km REAL,
+    maintenance_invoice_per_km REAL,
+    maintenance_slope REAL,
+    maintenance_monthly_deviation REAL,
+    -- Replacement car analysis
+    replacement_car_cost_per_km REAL,
+    replacement_car_invoice_per_km REAL,
+    replacement_car_slope REAL,
+    replacement_car_monthly_deviation REAL,
+    replacement_car_km REAL,
+    replacement_car_amount REAL,
+    -- Tyre analysis
+    tyre_cost_per_km REAL,
+    tyre_invoice_per_km REAL,
+    tyre_slope REAL,
+    tyre_monthly_deviation REAL,
+    -- Running totals
+    total_cost REAL,
+    total_invoiced REAL,
+    cost_per_km REAL,
+    total_surplus REAL,
+    total_surplus_absolute REAL,
+    total_total REAL,
+    -- Contract KM
+    last_week_km REAL,
+    update_km REAL,
+    -- Event counts
+    maintenance_count INTEGER,
+    fuel_count INTEGER,
+    replacement_car_count INTEGER,
+    tyre_count INTEGER,
+    tyre_new_count INTEGER,
+    tyre_winter_count INTEGER,
+    -- Private km & damage
+    private_km_pct REAL,
+    damage_count INTEGER,
+    damage_reserve REAL,
+    -- Segments
+    segment_01 REAL, segment_02 REAL, segment_03 REAL, segment_04 REAL, segment_05 REAL,
+    segment_06 REAL, segment_07 REAL, segment_08 REAL, segment_09 REAL, segment_10 REAL,
+    segment_11 REAL, segment_12 REAL, segment_13 REAL, segment_14 REAL, segment_15 REAL,
+    -- Metadata
+    country_code TEXT,
+    volume_code TEXT,
+    distance_code TEXT,
+    consumption_code TEXT,
+    currency_code TEXT,
+    -- Miscellaneous
+    misc_insurance_amount REAL,
+    misc_insurance_peryear REAL,
+    misc_insurance_run_no REAL,
+    misc_ts_amount REAL,
+    misc_ts_peryear REAL,
+    misc_ts_run_no REAL,
+    traffic_fines_no INTEGER,
+    -- Parking
+    parking_cost_total REAL,
+    parking_invoice_total REAL,
+    parking_monthly_deviation REAL,
+    parking_slope REAL,
+    -- Unspecified
+    unspecified_cost_total REAL,
+    unspecified_invoice_total REAL,
+    unspecified_monthly_deviation REAL,
+    unspecified_slope REAL,
+    -- Warranty
+    warranty_cost_total REAL,
+    warranty_invoice_total REAL,
+    warranty_monthly_deviation REAL,
+    warranty_slope REAL,
+    source_hash TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_staging_cr_object ON staging_car_reports(object_no);
+CREATE INDEX IF NOT EXISTS idx_staging_cr_period ON staging_car_reports(reporting_period);
+CREATE INDEX IF NOT EXISTS idx_staging_cr_object_period ON staging_car_reports(object_no, reporting_period);
 
 -- =============================================
 -- ETL Tracking Tables

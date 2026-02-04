@@ -458,6 +458,50 @@ class ApiService {
     });
     return response.data;
   }
+
+  // Renewals & Orders
+  async getRenewalsFilterOptions() {
+    const response = await this.client.get('/fleet/renewals/filters');
+    return response.data;
+  }
+
+  async getRenewalsKPIs() {
+    const response = await this.client.get('/fleet/renewals/kpis');
+    return response.data;
+  }
+
+  async getRenewalsList(params?: {
+    page?: number;
+    page_size?: number;
+    filter_type?: 'overdue_with_order' | 'overdue_no_order' | 'due_no_order' | 'renewal_orders' | 'new_orders' | 'all';
+    search?: string;
+    sort_by?: string;
+    sort_order?: 'asc' | 'desc';
+    // Advanced filters
+    customer_id?: number;
+    make?: string;
+    order_status_code?: number;
+    renewal_status?: string;
+  }) {
+    const response = await this.client.get('/fleet/renewals/list', { params });
+    return response.data;
+  }
+
+  async exportRenewals(params?: {
+    filter_type?: string;
+    search?: string;
+    customer_id?: number;
+    make?: string;
+    order_status_code?: number;
+    renewal_status?: string;
+    format?: 'csv';
+  }) {
+    const response = await this.client.get('/fleet/renewals/export', {
+      params,
+      responseType: 'blob'
+    });
+    return response.data;
+  }
 }
 
 export const api = new ApiService();

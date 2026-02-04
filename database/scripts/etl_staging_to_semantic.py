@@ -467,6 +467,176 @@ def load_fact_damages(conn):
     print(f"{count} rows")
 
 
+def load_dim_supplier(conn):
+    """Load supplier dimension."""
+    print("  Loading dim_supplier...", end=" ", flush=True)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM dim_supplier")
+    cursor.execute("""
+        INSERT INTO dim_supplier (
+            supplier_no, branch_no, supplier_name, name_line_2, name_line_3,
+            full_name, class, country_code, address, city, category,
+            phone, fax, email, contact_person, responsible_person, is_active
+        )
+        SELECT
+            supplier_no, branch_no, supplier_name, name_line_2, name_line_3,
+            TRIM(COALESCE(supplier_name, '') || ' ' || COALESCE(name_line_2, '') || ' ' || COALESCE(name_line_3, '')),
+            class, country_code, address, city, category,
+            phone, fax, email, contact_person, responsible_person, 1
+        FROM staging_suppliers
+    """)
+    conn.commit()
+    count = cursor.execute("SELECT COUNT(*) FROM dim_supplier").fetchone()[0]
+    print(f"{count} rows")
+
+
+def load_ref_domain_translation(conn):
+    """Load domain translation reference."""
+    print("  Loading ref_domain_translation...", end=" ", flush=True)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM ref_domain_translation")
+    cursor.execute("""
+        INSERT INTO ref_domain_translation (country_code, domain_id, domain_value, language_code, domain_text)
+        SELECT country_code, domain_id, domain_value, language_code, domain_text
+        FROM staging_domain_translations
+    """)
+    conn.commit()
+    count = cursor.execute("SELECT COUNT(*) FROM ref_domain_translation").fetchone()[0]
+    print(f"{count} rows")
+
+
+def load_fact_maintenance_approvals(conn):
+    """Load maintenance approvals fact table."""
+    print("  Loading fact_maintenance_approvals...", end=" ", flush=True)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM fact_maintenance_approvals")
+    cursor.execute("""
+        INSERT INTO fact_maintenance_approvals (
+            vehicle_id, supplier_no, supplier_name, approval_date,
+            mileage_km, amount, description, maintenance_type,
+            major_code, minor_code, source_code, reporting_period, country_code
+        )
+        SELECT
+            ma.object_no,
+            ma.supplier_no,
+            s.supplier_name,
+            ma.approval_date,
+            ma.mileage_km,
+            ma.amount,
+            TRIM(COALESCE(ma.description, '') || ' ' || COALESCE(ma.description_2, '') || ' ' || COALESCE(ma.description_3, '')),
+            ma.maintenance_type,
+            ma.major_code,
+            ma.minor_code,
+            ma.source_code,
+            ma.reporting_period,
+            ma.country_code
+        FROM staging_maintenance_approvals ma
+        LEFT JOIN staging_suppliers s ON ma.supplier_no = s.supplier_no
+    """)
+    conn.commit()
+    count = cursor.execute("SELECT COUNT(*) FROM fact_maintenance_approvals").fetchone()[0]
+    print(f"{count} rows")
+
+
+def load_fact_exploitation_services(conn):
+    """Load exploitation services fact table."""
+    print("  Loading fact_exploitation_services...", end=" ", flush=True)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM fact_exploitation_services")
+    cursor.execute("""
+        INSERT INTO fact_exploitation_services (
+            vehicle_id, customer_no, service_sequence, service_code,
+            service_cost_total, service_invoice, total_monthly_cost,
+            total_monthly_invoice, reporting_period, country_code, currency_code
+        )
+        SELECT
+            object_no, customer_no, service_sequence, service_code,
+            service_cost_total, service_invoice, total_monthly_cost,
+            total_monthly_invoice, reporting_period, country_code, currency_code
+        FROM staging_exploitation_services
+    """)
+    conn.commit()
+    count = cursor.execute("SELECT COUNT(*) FROM fact_exploitation_services").fetchone()[0]
+    print(f"{count} rows")
+
+
+def load_fact_passed_invoices(conn):
+    """Load passed invoices fact table."""
+    print("  Loading fact_passed_invoices...", end=" ", flush=True)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM fact_passed_invoices")
+    cursor.execute("""
+        INSERT INTO fact_passed_invoices (
+            vehicle_id, customer_no, contract_no, amount, cost_code,
+            description, gross_net, invoice_no, origin_code,
+            source_code, vat_type, reporting_period, country_code
+        )
+        SELECT
+            object_no, customer_no, contract_no, amount, cost_code,
+            description, gross_net, invoice_no, origin_code,
+            source_code, vat_type, reporting_period, country_code
+        FROM staging_passed_invoices
+    """)
+    conn.commit()
+    count = cursor.execute("SELECT COUNT(*) FROM fact_passed_invoices").fetchone()[0]
+    print(f"{count} rows")
+
+
+def load_fact_replacement_cars(conn):
+    """Load replacement cars fact table."""
+    print("  Loading fact_replacement_cars...", end=" ", flush=True)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM fact_replacement_cars")
+    cursor.execute("""
+        INSERT INTO fact_replacement_cars (
+            vehicle_id, rc_no, driver_name, begin_date, end_date,
+            rc_code, km, amount, reason, description, rc_type,
+            reporting_period, country_code
+        )
+        SELECT
+            object_no, rc_no, driver_name, begin_date, end_date,
+            rc_code, km, amount, reason,
+            TRIM(COALESCE(description, '') || ' ' || COALESCE(description_2, '') || ' ' || COALESCE(description_3, '')),
+            type, reporting_period, country_code
+        FROM staging_replacement_cars
+    """)
+    conn.commit()
+    count = cursor.execute("SELECT COUNT(*) FROM fact_replacement_cars").fetchone()[0]
+    print(f"{count} rows")
+
+
+def load_fact_car_reports(conn):
+    """Load car reports fact table (monthly vehicle snapshot)."""
+    print("  Loading fact_car_reports...", end=" ", flush=True)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM fact_car_reports")
+    cursor.execute("""
+        INSERT INTO fact_car_reports (
+            vehicle_id, reporting_period, fuel_cost_total, maintenance_cost_total,
+            replacement_car_cost_total, tyre_cost_total,
+            fuel_invoice_total, maintenance_invoice_total,
+            replacement_car_invoice_total, tyre_invoice_total,
+            total_cost, total_invoiced, km_driven, monthly_km_driven,
+            cost_per_km, fuel_consumption, fuel_cost_per_km, maintenance_cost_per_km,
+            maintenance_count, fuel_count, replacement_car_count, tyre_count,
+            damage_count, total_surplus, country_code, currency_code
+        )
+        SELECT
+            object_no, reporting_period, fuel_cost_total, maintenance_cost_total,
+            replacement_car_cost_total, tyre_cost_total,
+            fuel_invoice_total, maintenance_invoice_total,
+            replacement_car_invoice_total, tyre_invoice_total,
+            total_cost, total_invoiced, km_driven, monthly_km_driven,
+            cost_per_km, fuel_consumption, fuel_cost_per_km, maintenance_cost_per_km,
+            maintenance_count, fuel_count, replacement_car_count, tyre_count,
+            damage_count, total_surplus, country_code, currency_code
+        FROM staging_car_reports
+    """)
+    conn.commit()
+    count = cursor.execute("SELECT COUNT(*) FROM fact_car_reports").fetchone()[0]
+    print(f"{count} rows")
+
+
 def populate_metadata_catalog(conn):
     """Populate metadata catalog for AI discovery."""
     print("  Populating metadata catalog...", end=" ", flush=True)
@@ -497,6 +667,17 @@ def populate_metadata_catalog(conn):
         ('view_customer_contracts', 'Customer Contracts', 'Contract totals and values by customer', 'Contract', 'One row per customer', 'Total contract value by customer?'),
         ('view_make_model_distribution', 'Make/Model Distribution', 'Count of vehicles by make and model', 'Fleet', 'One row per make-model', 'Which makes are most common? Vehicle brand distribution?'),
         ('view_account_manager_portfolio', 'Account Manager Portfolio', 'Customers and vehicles managed by each account manager', 'Customer', 'One row per account manager', 'Who manages which customers? Account manager workload?'),
+        ('dim_supplier', 'Suppliers', 'Master list of maintenance and service suppliers/vendors', 'Supplier', 'One row per supplier-branch combination', 'Who are our suppliers? Supplier contact information? Which suppliers do maintenance?'),
+        ('ref_domain_translation', 'Domain Translations', 'Reference lookup table translating coded domain values to human-readable text', 'Reference', 'One row per domain-value-language combination', 'What does code X mean? Domain value lookups'),
+        ('ref_reporting_period', 'Reporting Periods', 'Reference table defining reporting period dates', 'Reference', 'One row per reporting period', 'What period is current? Reporting period dates'),
+        ('fact_maintenance_approvals', 'Maintenance Approvals', 'Detailed maintenance and service approval records for vehicles including costs, suppliers, and mileage at time of service', 'Maintenance', 'One row per maintenance approval event', 'Maintenance costs by vehicle? Which supplier services vehicle X? Maintenance history? Total maintenance spending?'),
+        ('fact_exploitation_services', 'Monthly Service Costs & Invoices', 'Monthly cost and invoice amounts (AED) for each vehicle by exploitation/service type. ALWAYS use this table for per-month cost/invoice queries. service_code identifies the service type (e.g. 580=Maintenance, 581=Tyres, 100=Insurance). Look up service descriptions via ref_domain_translation (domain_id=5).', 'Financial', 'One row per vehicle per service type per month', 'What is the maintenance cost/invoice per month? Monthly costs by service type? How much was invoiced for tyres? Total service costs for a vehicle?'),
+        ('fact_passed_invoices', 'Passed On Invoices', 'Invoice items passed on to customers for vehicle-related costs', 'Financial', 'One row per passed invoice line', 'Passed invoice amounts? Invoices by customer?'),
+        ('fact_replacement_cars', 'Replacement Cars', 'Records of replacement/courtesy cars provided when vehicles are in service', 'Operations', 'One row per replacement car usage', 'Replacement car usage? How long are replacements? Replacement car costs?'),
+        ('fact_car_reports', 'Vehicle Cost Reports', 'Monthly snapshot of all vehicle costs including fuel, maintenance, tyres, and replacement cars with running totals and per-km analysis', 'Financial', 'One row per vehicle per reporting period', 'Total cost of ownership? Vehicle running costs? Cost per km? Fuel consumption trends? Which vehicles cost the most?'),
+        ('view_maintenance_analysis', 'Maintenance Analysis', 'Detailed view of maintenance events with vehicle and supplier details', 'Maintenance', 'One row per maintenance event', 'Maintenance details with vehicle info? Supplier maintenance history?'),
+        ('view_vehicle_cost_analysis', 'Vehicle Cost Analysis', 'Vehicle cost breakdown from monthly car reports', 'Financial', 'One row per vehicle per period', 'Vehicle cost breakdown? Running costs by vehicle?'),
+        ('view_supplier_summary', 'Supplier Summary', 'Aggregated supplier statistics including total spending and vehicles serviced', 'Supplier', 'One row per supplier', 'Top suppliers by spending? How many vehicles does each supplier service?'),
     ]
 
     cursor.executemany("""
@@ -564,6 +745,45 @@ def populate_metadata_catalog(conn):
         ('fact_damages', 'third_party_name', 'Third Party Name', 'Name of the third party involved in the accident', 'TEXT', None, None, 0, 1, 0),
         ('fact_damages', 'garage_name', 'Garage Name', 'Name of the repair garage', 'TEXT', None, None, 0, 1, 0),
         ('fact_damages', 'country_code', 'Country Code', 'Country where the damage record belongs', 'TEXT', None, None, 0, 1, 0),
+
+        # Suppliers
+        ('dim_supplier', 'supplier_no', 'Supplier Number', 'Unique identifier for the supplier', 'INTEGER', None, None, 0, 1, 1),
+        ('dim_supplier', 'supplier_name', 'Supplier Name', 'Name of the supplier/vendor company', 'TEXT', None, None, 0, 1, 0),
+        ('dim_supplier', 'city', 'City', 'City where supplier is located', 'TEXT', None, None, 0, 1, 0),
+        ('dim_supplier', 'category', 'Category', 'Supplier category classification', 'TEXT', None, None, 0, 1, 0),
+
+        # Maintenance Approvals
+        ('fact_maintenance_approvals', 'vehicle_id', 'Vehicle ID', 'Vehicle that received maintenance (links to dim_vehicle)', 'INTEGER', None, None, 0, 1, 0),
+        ('fact_maintenance_approvals', 'amount', 'Maintenance Amount', 'Cost of the maintenance event', 'REAL', None, None, 1, 0, 0),
+        ('fact_maintenance_approvals', 'approval_date', 'Approval Date', 'Date maintenance was approved/performed', 'TEXT', None, None, 0, 1, 0),
+        ('fact_maintenance_approvals', 'supplier_name', 'Supplier Name', 'Name of supplier who performed the maintenance', 'TEXT', None, None, 0, 1, 0),
+        ('fact_maintenance_approvals', 'description', 'Description', 'Description of maintenance work performed', 'TEXT', None, None, 0, 1, 0),
+        ('fact_maintenance_approvals', 'maintenance_type', 'Maintenance Type', 'Type code for the maintenance category', 'INTEGER', None, None, 0, 1, 0),
+
+        # Car Reports
+        ('fact_car_reports', 'vehicle_id', 'Vehicle ID', 'Vehicle this report belongs to (links to dim_vehicle via vehicle_id = vehicle_id)', 'INTEGER', None, None, 0, 1, 0),
+        ('fact_car_reports', 'reporting_period', 'Reporting Period', 'YYYYMM integer (e.g. 202601 = January 2026). Do NOT join to dim_date. Filter directly with integer comparison.', 'INTEGER', '202601, 202512, 202505', 'YYYYMM format. Do NOT join to dim_date. Use integer comparison for date filtering.', 0, 1, 0),
+        ('fact_car_reports', 'total_cost', 'Total Cost (AED)', 'Cumulative total cost in AED for the vehicle across all cost categories', 'REAL', None, 'Actual AED amount', 1, 0, 0),
+        ('fact_car_reports', 'total_invoiced', 'Total Invoiced (AED)', 'Total amount invoiced to customer in AED', 'REAL', None, 'Actual AED amount', 1, 0, 0),
+        ('fact_car_reports', 'cost_per_km', 'Cost Per Km', 'Total cost divided by kilometers driven (AED per km)', 'REAL', None, None, 1, 0, 0),
+        ('fact_car_reports', 'km_driven', 'Kilometers Driven', 'Total kilometers driven by the vehicle', 'REAL', None, None, 1, 0, 0),
+        ('fact_car_reports', 'maintenance_cost_total', 'Maintenance Cost Rate', 'Maintenance cost per km RATE (not AED total). Multiply by km_driven to get AED. For monthly AED amounts use fact_exploitation_services instead.', 'REAL', None, 'Per-km rate, NOT AED. Use fact_exploitation_services for actual monthly AED amounts.', 1, 0, 0),
+        ('fact_car_reports', 'fuel_consumption', 'Fuel Consumption', 'Fuel consumption rate for the vehicle', 'REAL', None, None, 1, 0, 0),
+        ('fact_car_reports', 'total_surplus', 'Total Surplus (AED)', 'Surplus amount in AED (invoiced minus actual cost)', 'REAL', None, 'Actual AED amount', 1, 0, 0),
+
+        # Exploitation Services
+        ('fact_exploitation_services', 'vehicle_id', 'Vehicle ID', 'Vehicle this service belongs to (links to dim_vehicle)', 'INTEGER', None, None, 0, 1, 0),
+        ('fact_exploitation_services', 'service_code', 'Service Code', 'Type of service: 580=Maintenance, 100=Tyres, 11=Insurance, 620=Replacement Car, 650=Fuel, 999=Total', 'INTEGER', '580, 100, 11', None, 0, 1, 0),
+        ('fact_exploitation_services', 'total_monthly_cost', 'Monthly Cost (AED)', 'Actual cost in AED for this service type in this month', 'REAL', None, 'Actual AED amount per month', 1, 0, 0),
+        ('fact_exploitation_services', 'total_monthly_invoice', 'Monthly Invoice (AED)', 'Actual invoiced amount in AED for this service type in this month', 'REAL', None, 'Actual AED amount per month', 1, 0, 0),
+        ('fact_exploitation_services', 'reporting_period', 'Reporting Period', 'YYYYMM integer. Same format as fact_car_reports.', 'INTEGER', '202601, 202512', 'YYYYMM format', 0, 1, 0),
+
+        # Replacement Cars
+        ('fact_replacement_cars', 'vehicle_id', 'Vehicle ID', 'Vehicle that needed replacement (links to dim_vehicle)', 'INTEGER', None, None, 0, 1, 0),
+        ('fact_replacement_cars', 'amount', 'Replacement Cost', 'Cost of the replacement car usage', 'REAL', None, None, 1, 0, 0),
+        ('fact_replacement_cars', 'km', 'Replacement Km', 'Kilometers driven in replacement car', 'REAL', None, None, 1, 0, 0),
+        ('fact_replacement_cars', 'begin_date', 'Start Date', 'Start date of replacement car usage', 'TEXT', None, None, 0, 1, 0),
+        ('fact_replacement_cars', 'end_date', 'End Date', 'End date of replacement car usage', 'TEXT', None, None, 0, 1, 0),
     ]
 
     cursor.executemany("""
@@ -584,6 +804,13 @@ def populate_metadata_catalog(conn):
         ('dim_vehicle', 'vehicle_status_code', 'ref_vehicle_status', 'status_code', 'many-to-one', 'Each vehicle has one status from the status reference table'),
         ('dim_group', 'customer_id', 'dim_customer', 'customer_id', 'many-to-one', 'Each group belongs to one customer'),
         ('fact_damages', 'vehicle_id', 'dim_vehicle', 'vehicle_id', 'many-to-one', 'Each damage record is for one vehicle'),
+        ('fact_maintenance_approvals', 'vehicle_id', 'dim_vehicle', 'vehicle_id', 'many-to-one', 'Each maintenance approval is for one vehicle'),
+        ('fact_maintenance_approvals', 'supplier_no', 'dim_supplier', 'supplier_no', 'many-to-one', 'Each maintenance event is performed by one supplier'),
+        ('fact_exploitation_services', 'vehicle_id', 'dim_vehicle', 'vehicle_id', 'many-to-one', 'Each service record is for one vehicle'),
+        ('fact_passed_invoices', 'vehicle_id', 'dim_vehicle', 'vehicle_id', 'many-to-one', 'Each passed invoice is for one vehicle'),
+        ('fact_replacement_cars', 'vehicle_id', 'dim_vehicle', 'vehicle_id', 'many-to-one', 'Each replacement car record is for one vehicle'),
+        ('fact_car_reports', 'vehicle_id', 'dim_vehicle', 'vehicle_id', 'many-to-one', 'Each car report belongs to one vehicle'),
+        ('fact_exploitation_services', 'service_code', 'ref_domain_translation', 'domain_value', 'many-to-one', 'Service code maps to domain_value in ref_domain_translation (domain_id=5, language_code=E) for exploitation code description'),
     ]
 
     cursor.executemany("""
@@ -621,6 +848,13 @@ def populate_metadata_catalog(conn):
         ('Months Driven', 'Number of months elapsed from the lease/contract start date to today', 'time on lease, months elapsed, contract age', 'dim_vehicle, dim_contract', 'months between start_date and now'),
         ('Months Remaining', 'Number of months from today to the expected contract end date. Negative means the contract is past its expected end.', 'time left, contract remaining, expiring soon', 'dim_vehicle, dim_contract', 'months between now and expected_end_date'),
         ('Days to Contract End', 'Number of days from today to the expected contract end date. Use for precise renewal timing and urgency-based prioritization. Negative values indicate overdue contracts. Ideal for AI-driven renewal intelligence and alerts.', 'days remaining, days left, renewal countdown, contract countdown, days until expiry', 'dim_vehicle, dim_contract', 'julianday(expected_end_date) - julianday(now)'),
+        ('Supplier', 'A company or workshop that provides maintenance, repair, tyre, or other services for fleet vehicles', 'vendor, workshop, garage, service provider', 'dim_supplier, fact_maintenance_approvals', None),
+        ('Maintenance Approval', 'An approved maintenance or service event for a vehicle, recording the work done, cost, mileage, and supplier', 'service record, repair approval, maintenance event, work order', 'fact_maintenance_approvals', None),
+        ('Exploitation Service', 'A service cost record for a vehicle, tracking individual service types and their costs and invoiced amounts', 'service cost, exploitation cost', 'fact_exploitation_services', None),
+        ('Replacement Car', 'A courtesy or replacement vehicle provided to a driver while their primary vehicle is being serviced or repaired', 'courtesy car, loaner, substitute vehicle, pool car', 'fact_replacement_cars', None),
+        ('Car Report', 'A monthly snapshot of all running costs for a vehicle including fuel, maintenance, tyres, and replacement cars, with cumulative totals and per-km analysis', 'vehicle report, cost report, running cost, TCO, total cost of ownership', 'fact_car_reports', None),
+        ('Cost Per Km', 'The total running cost of a vehicle divided by kilometers driven, a key efficiency metric', 'cost per kilometer, running cost rate, unit cost', 'fact_car_reports', 'total_cost / km_driven'),
+        ('Passed Invoice', 'An invoice line item that has been passed on (charged) to the customer for vehicle-related costs', 'recharged invoice, customer charge, pass-through cost', 'fact_passed_invoices', None),
     ]
 
     cursor.executemany("""
@@ -717,12 +951,19 @@ def main():
     load_dim_contract(conn)
     load_dim_group(conn)
     load_dim_make_model(conn)
+    load_dim_supplier(conn)
+    load_ref_domain_translation(conn)
     print()
 
     print("Loading fact tables...")
     load_fact_odometer(conn)
     load_fact_billing(conn)
     load_fact_damages(conn)
+    load_fact_maintenance_approvals(conn)
+    load_fact_exploitation_services(conn)
+    load_fact_passed_invoices(conn)
+    load_fact_replacement_cars(conn)
+    load_fact_car_reports(conn)
     print()
 
     print("Populating metadata and KPIs...")
@@ -740,7 +981,10 @@ def main():
     tables = [
         'dim_date', 'dim_customer', 'dim_vehicle', 'dim_driver',
         'dim_contract', 'dim_group', 'dim_make_model',
+        'dim_supplier', 'ref_domain_translation',
         'fact_odometer_reading', 'fact_billing', 'fact_damages',
+        'fact_maintenance_approvals', 'fact_exploitation_services',
+        'fact_passed_invoices', 'fact_replacement_cars', 'fact_car_reports',
         'semantic_table_catalog', 'semantic_column_catalog',
         'agg_fleet_kpis', 'agg_customer_kpis'
     ]

@@ -126,7 +126,12 @@ export const useAIStore = create<AIState>((set, get) => ({
         message_id: typeof msg === 'object' ? msg.message_id : Date.now(),
         role: 'assistant',
         content: typeof msg === 'object' ? msg.content : String(msg),
-        metadata: typeof msg === 'object' ? msg.metadata : undefined,
+        metadata: {
+          ...(typeof msg === 'object' ? msg.metadata : {}),
+          // Include data and chart_config in metadata for inline display
+          data: response.data,
+          chart_config: response.chart_config,
+        },
         created_at: typeof msg === 'object' && msg.created_at ? msg.created_at : new Date().toISOString(),
       };
 

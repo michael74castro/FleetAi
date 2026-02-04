@@ -1,6 +1,6 @@
 """
 FleetAI - Daily Data Extraction DAG
-Extracts 39 tables from IBM Power10 DB2 for i to MSSQL landing schema
+Extracts 47 tables from IBM Power10 DB2 for i to MSSQL landing schema
 Schedule: Daily at 2:00 AM
 """
 
@@ -40,7 +40,7 @@ DAILY_TABLES = [
     {'source': 'CCBI', 'target': 'CCBI', 'key_cols': ['CCBI_BILLING_ID'], 'staging': 'customer_billing'},
 
     # Driver domain
-    {'source': 'CCDA', 'target': 'CCDA', 'key_cols': ['CCDA_ASSIGNMENT_ID'], 'staging': 'driver_vehicle_assignments'},
+    {'source': 'CCDA', 'target': 'CCDA', 'key_cols': ['CCDA_DADANO'], 'staging': 'damages'},
     {'source': 'CCDR', 'target': 'CCDR', 'key_cols': ['CCDR_DRIVER_ID'], 'staging': 'drivers'},
 
     # Fuel domain
@@ -85,6 +85,20 @@ DAILY_TABLES = [
     {'source': 'CWOR', 'target': 'CWOR', 'key_cols': ['CWOR_REPAIR_ID'], 'staging': 'work_order_repairs'},
     {'source': 'CWPC', 'target': 'CWPC', 'key_cols': ['CWPC_CHARGE_ID'], 'staging': 'work_order_parts'},
     {'source': 'CWPO', 'target': 'CWPO', 'key_cols': ['CWPO_PO_NO'], 'staging': 'wo_purchase_orders'},
+
+    # Domain/Reference tables (Set2)
+    {'source': 'CCDT', 'target': 'CCDT', 'key_cols': ['CCDT_DTDMID', 'CCDT_DTDMVA'], 'staging': 'domain_translations'},
+    {'source': 'CCRP', 'target': 'CCRP', 'key_cols': ['CCRP_RPRPPD'], 'staging': 'reporting_periods'},
+    {'source': 'CCSU', 'target': 'CCSU', 'key_cols': ['CCSU_SUNUFO', 'CCSU_SUNAFO'], 'staging': 'suppliers'},
+
+    # Transactional tables (Set2)
+    {'source': 'CCES', 'target': 'CCES', 'key_cols': ['CCES_ESOBNO', 'CCES_ESESSQ'], 'staging': 'exploitation_services'},
+    {'source': 'CCMS', 'target': 'CCMS', 'key_cols': ['CCMS_MSOBNO', 'CCMS_MSGDSQ'], 'staging': 'maintenance_approvals'},
+    {'source': 'CCPI', 'target': 'CCPI', 'key_cols': ['CCPI_PIOBNO', 'CCPI_PIPICD'], 'staging': 'passed_invoices'},
+    {'source': 'CCRC', 'target': 'CCRC', 'key_cols': ['CCRC_RCOBNO', 'CCRC_RCRCNO', 'CCRC_RCRCSQ'], 'staging': 'replacement_cars'},
+
+    # Car Reports / Fact snapshot (Set3)
+    {'source': 'CCCR', 'target': 'CCCR', 'key_cols': ['CCCR_CROBNO', 'CCCR_CRRPPD'], 'staging': 'car_reports'},
 ]
 
 
@@ -92,7 +106,7 @@ DAILY_TABLES = [
 with DAG(
     dag_id='fleetai_daily_extraction',
     default_args=default_args,
-    description='Daily extraction of 39 tables from IBM Power10 DB2 to MSSQL',
+    description='Daily extraction of 47 tables from IBM Power10 DB2 to MSSQL',
     schedule_interval='0 2 * * *',  # 2:00 AM daily
     start_date=datetime(2026, 1, 1),
     catchup=False,

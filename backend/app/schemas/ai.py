@@ -106,7 +106,7 @@ class SQLGenerationRequest(BaseModel):
 class SQLGenerationResponse(BaseModel):
     """Response with generated SQL"""
     user_query: str
-    generated_sql: str
+    generated_sql: Optional[str] = None
     explanation: str
     is_safe: bool
     safety_notes: Optional[str] = None
