@@ -77,8 +77,9 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center mb-6">
             <img
               src="/logo.png"
-              alt="LeasePlan"
-              className="h-16 w-auto object-contain"
+              alt="LeaseIQ"
+              className="h-48 w-auto object-contain"
+              style={{ mixBlendMode: 'lighten' }}
             />
           </div>
           <h1 className="text-4xl font-bold text-white tracking-tight">

@@ -158,6 +158,17 @@ class AIService:
                     result["suggestions"] = self._generate_suggestions(user_message, user_context)
                     return result
 
+                # Check for fleet-wide maintenance insights
+                maintenance_insights_result = await self._handle_maintenance_insights_query(user_message.lower())
+                if maintenance_insights_result:
+                    result["data"] = maintenance_insights_result["data"]
+                    result["message"] = maintenance_insights_result["message"]
+                    chart_config = self._detect_chart_config(result["data"], user_message)
+                    if chart_config:
+                        result["chart_config"] = chart_config
+                    result["suggestions"] = self._generate_suggestions(user_message, user_context)
+                    return result
+
                 # Check for service cost/invoice queries (maintenance, tyres, etc.)
                 service_result = await self._handle_service_cost_query(user_message.lower())
                 if service_result:
@@ -1153,7 +1164,8 @@ Guidelines:
             "what is", "which", "report", "breakdown",
             "by status", "by make", "by customer", "by type",
             "per month", "per year", "distribution", "top",
-            "chart", "graph", "visualize", "display"
+            "chart", "graph", "visualize", "display",
+            "insight", "insights", "analyze", "analysis", "generate", "overview", "summary", "trend"
         ]
         message_lower = message.lower()
         return any(kw in message_lower for kw in data_keywords)
@@ -1531,7 +1543,10 @@ ORDER BY es.reporting_period"""
         """Handle contract expiry/renewal queries.
 
         Returns vehicles expiring in the next N months with proper is_active filter.
+        Uses actual month names (e.g., "February 2026") starting from current month.
         """
+        from datetime import datetime
+        from dateutil.relativedelta import relativedelta
 
         # Detect expiry/renewal queries
         expiry_keywords = ['expir', 'renew', 'ending', 'contract end', 'lease end',
@@ -1552,60 +1567,72 @@ ORDER BY es.reporting_period"""
             months_ahead = 3
 
         try:
+            # Get current date for month calculations
+            today = datetime.now()
+            month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+                          'July', 'August', 'September', 'October', 'November', 'December']
+
+            # Build month labels dynamically starting from current month
+            month_labels = []
+            for i in range(months_ahead):
+                future_date = today + relativedelta(months=i)
+                month_labels.append(f"{month_names[future_date.month]} {future_date.year}")
+
             # Query vehicles expiring in the next N months (active only)
+            # Group by month of expected_end_date
             sql = f"""
             SELECT
-                CASE
-                    WHEN days_to_contract_end BETWEEN 0 AND 30 THEN '0-1 Month'
-                    WHEN days_to_contract_end BETWEEN 31 AND 60 THEN '1-2 Months'
-                    WHEN days_to_contract_end BETWEEN 61 AND 90 THEN '2-3 Months'
-                    WHEN days_to_contract_end BETWEEN 91 AND 120 THEN '3-4 Months'
-                    WHEN days_to_contract_end BETWEEN 121 AND 150 THEN '4-5 Months'
-                    WHEN days_to_contract_end BETWEEN 151 AND 180 THEN '5-6 Months'
-                    WHEN days_to_contract_end BETWEEN 181 AND 210 THEN '6-7 Months'
-                    WHEN days_to_contract_end BETWEEN 211 AND 240 THEN '7-8 Months'
-                    WHEN days_to_contract_end BETWEEN 241 AND 270 THEN '8-9 Months'
-                    WHEN days_to_contract_end BETWEEN 271 AND 300 THEN '9-10 Months'
-                    WHEN days_to_contract_end BETWEEN 301 AND 330 THEN '10-11 Months'
-                    WHEN days_to_contract_end BETWEEN 331 AND 365 THEN '11-12 Months'
-                END as period,
+                strftime('%Y-%m', expected_end_date) as month_key,
                 COUNT(*) as vehicle_count
             FROM dim_vehicle
             WHERE days_to_contract_end BETWEEN 0 AND {months_ahead * 30}
               AND is_active = 1
-            GROUP BY period
-            ORDER BY MIN(days_to_contract_end)
+              AND expected_end_date IS NOT NULL
+            GROUP BY month_key
+            ORDER BY month_key
             """
 
             result = await self.db.execute(text(sql))
             columns = list(result.keys())
-            results = [dict(zip(columns, row)) for row in result.fetchall() if row[0] is not None]
+            raw_results = [dict(zip(columns, row)) for row in result.fetchall() if row[0] is not None]
 
-            if not results:
+            if not raw_results:
                 return {
                     "data": [],
                     "message": f"No vehicles found expiring in the next {months_ahead} months."
                 }
+
+            # Convert month_key (YYYY-MM) to readable format (Month Year)
+            results = []
+            for r in raw_results:
+                month_key = r.get('month_key', '')
+                if month_key:
+                    year, month = month_key.split('-')
+                    month_name = f"{month_names[int(month)]} {year}"
+                    results.append({
+                        'month': month_name,
+                        'vehicle_count': r.get('vehicle_count', 0)
+                    })
 
             # Calculate total
             total = sum(r.get('vehicle_count', 0) for r in results)
 
             # Find the peak period
             peak = max(results, key=lambda x: x.get('vehicle_count', 0))
-            peak_period = peak.get('period', '')
+            peak_period = peak.get('month', '')
             peak_count = peak.get('vehicle_count', 0)
 
             # Build message
             message = f"**Vehicles Expiring in the Next {months_ahead} Months:**\n\n"
             for r in results:
-                period = r.get('period', '')
+                month = r.get('month', '')
                 count = r.get('vehicle_count', 0)
-                message += f"- **{period}**: {count:,} vehicles\n"
+                message += f"- **{month}**: {count:,} vehicles\n"
 
             message += f"\n**Total: {total:,} vehicles**"
 
             # Add Notable insight
-            message += f"\n\n**Notable:** {peak_period} has the highest volume with **{peak_count:,} vehicles** expiring"
+            message += f"\n\n**Notable:** **{peak_period}** has the highest volume with **{peak_count:,} vehicles** expiring"
             if peak_count > total * 0.3:
                 message += " - this represents over 30% of expiring contracts. Prioritize renewal planning for this period."
             else:
@@ -1619,6 +1646,162 @@ ORDER BY es.reporting_period"""
 
         except Exception as e:
             logger.error(f"Contract expiry query failed: {e}")
+            return None
+
+    async def _handle_maintenance_insights_query(self, query_lower: str) -> dict | None:
+        """Handle fleet-wide maintenance cost insights queries.
+
+        Returns maintenance cost breakdown by month and by service type for the entire fleet.
+        """
+        from datetime import datetime
+
+        # Detect maintenance insights queries (fleet-wide, no specific vehicle)
+        insight_keywords = ['insight', 'analyze', 'analysis', 'overview', 'summary', 'trend', 'generate']
+        maintenance_keywords = ['maintenance', 'repair', 'service cost', 'servicing', 'cost']
+
+        has_insight = any(kw in query_lower for kw in insight_keywords)
+        has_maintenance = any(kw in query_lower for kw in maintenance_keywords)
+
+        # Don't trigger if there's a specific vehicle number (let the other handler deal with it)
+        has_vehicle = re.search(r'\d{5,8}', query_lower) is not None
+
+        logger.info(f"Maintenance insights check: insight={has_insight}, maintenance={has_maintenance}, vehicle={has_vehicle}, query={query_lower[:50]}")
+
+        if not (has_insight and has_maintenance) or has_vehicle:
+            return None
+
+        logger.info("Maintenance insights handler triggered")
+
+        try:
+            month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+                          'July', 'August', 'September', 'October', 'November', 'December']
+
+            # Query 1: Monthly maintenance costs for last 12 months
+            sql_monthly = """
+            SELECT
+                es.reporting_period,
+                SUM(es.total_monthly_cost) as total_cost,
+                SUM(es.total_monthly_invoice) as total_invoice,
+                COUNT(DISTINCT es.vehicle_id) as vehicles_serviced
+            FROM fact_exploitation_services es
+            WHERE es.service_code = 580
+              AND es.reporting_period >= CAST(strftime('%Y%m', date('now', '-12 months')) AS INTEGER)
+            GROUP BY es.reporting_period
+            ORDER BY es.reporting_period
+            """
+
+            result = await self.db.execute(text(sql_monthly))
+            columns = list(result.keys())
+            monthly_data = [dict(zip(columns, row)) for row in result.fetchall()]
+
+            # Query 2: Top customers by maintenance cost
+            sql_top_customers = """
+            SELECT
+                v.customer_name,
+                SUM(es.total_monthly_cost) as total_cost,
+                COUNT(DISTINCT es.vehicle_id) as vehicle_count
+            FROM fact_exploitation_services es
+            JOIN dim_vehicle v ON es.vehicle_id = v.vehicle_id
+            WHERE es.service_code = 580
+              AND es.reporting_period >= CAST(strftime('%Y%m', date('now', '-12 months')) AS INTEGER)
+            GROUP BY v.customer_name
+            ORDER BY total_cost DESC
+            LIMIT 5
+            """
+
+            result2 = await self.db.execute(text(sql_top_customers))
+            columns2 = list(result2.keys())
+            top_customers = [dict(zip(columns2, row)) for row in result2.fetchall()]
+
+            if not monthly_data:
+                return {
+                    "data": [],
+                    "message": "No maintenance cost data found for the last 12 months."
+                }
+
+            # Format monthly data for display
+            chart_data = []
+            for row in monthly_data:
+                period = row.get('reporting_period', 0)
+                if period:
+                    year = period // 100
+                    month = period % 100
+                    row['month'] = f"{month_names[month]} {year}"
+                    chart_data.append({
+                        'month': row['month'],
+                        'total_cost': row.get('total_cost', 0) or 0,
+                        'vehicles_serviced': row.get('vehicles_serviced', 0) or 0
+                    })
+
+            # Calculate totals and insights
+            total_cost = sum(r.get('total_cost', 0) or 0 for r in monthly_data)
+            total_invoice = sum(r.get('total_invoice', 0) or 0 for r in monthly_data)
+            total_vehicles = sum(r.get('vehicles_serviced', 0) or 0 for r in monthly_data)
+            avg_monthly_cost = total_cost / len(monthly_data) if monthly_data else 0
+
+            # Find peak month
+            peak_month = max(monthly_data, key=lambda x: x.get('total_cost', 0) or 0)
+            peak_period = peak_month.get('reporting_period', 0)
+            peak_year = peak_period // 100
+            peak_mon = peak_period % 100
+            peak_month_name = f"{month_names[peak_mon]} {peak_year}"
+            peak_cost = peak_month.get('total_cost', 0) or 0
+
+            # Find trend (compare last 3 months to previous 3 months)
+            if len(monthly_data) >= 6:
+                recent_3 = sum(r.get('total_cost', 0) or 0 for r in monthly_data[-3:])
+                previous_3 = sum(r.get('total_cost', 0) or 0 for r in monthly_data[-6:-3])
+                if previous_3 > 0:
+                    trend_pct = ((recent_3 - previous_3) / previous_3) * 100
+                    trend_direction = "increased" if trend_pct > 0 else "decreased"
+                else:
+                    trend_pct = 0
+                    trend_direction = "stable"
+            else:
+                trend_pct = 0
+                trend_direction = "insufficient data"
+
+            # Build message
+            message = "**Maintenance Cost Insights (Last 12 Months)**\n\n"
+
+            message += "**Summary:**\n"
+            message += f"- **Total Maintenance Cost**: AED {total_cost:,.2f}\n"
+            message += f"- **Total Invoiced**: AED {total_invoice:,.2f}\n"
+            message += f"- **Average Monthly Cost**: AED {avg_monthly_cost:,.2f}\n"
+            message += f"- **Vehicles Serviced**: {total_vehicles:,} service events\n\n"
+
+            message += "**Monthly Breakdown:**\n"
+            for row in monthly_data[-6:]:  # Last 6 months
+                month_str = row.get('month', '')
+                cost = row.get('total_cost', 0) or 0
+                vehicles = row.get('vehicles_serviced', 0) or 0
+                message += f"- **{month_str}**: AED {cost:,.2f} ({vehicles} vehicles)\n"
+
+            if top_customers:
+                message += "\n**Top 5 Customers by Maintenance Cost:**\n"
+                for cust in top_customers:
+                    name = cust.get('customer_name', 'Unknown')
+                    cost = cust.get('total_cost', 0) or 0
+                    count = cust.get('vehicle_count', 0) or 0
+                    message += f"- **{name}**: AED {cost:,.2f} ({count} vehicles)\n"
+
+            # Notable insight
+            message += f"\n**Notable:** **{peak_month_name}** had the highest maintenance costs at **AED {peak_cost:,.2f}**."
+            if trend_direction != "insufficient data":
+                message += f" Recent trend shows costs have **{trend_direction}** by **{abs(trend_pct):.1f}%** compared to the previous quarter."
+                if trend_pct > 15:
+                    message += " Consider reviewing maintenance contracts or investigating potential issues."
+                elif trend_pct < -15:
+                    message += " Good progress on cost optimization."
+
+            logger.info(f"Maintenance insights handler returning {len(chart_data)} months of data")
+            return {
+                "data": chart_data,
+                "message": message
+            }
+
+        except Exception as e:
+            logger.error(f"Maintenance insights query failed: {e}")
             return None
 
     def _validate_sql_safety(self, sql: str) -> bool:

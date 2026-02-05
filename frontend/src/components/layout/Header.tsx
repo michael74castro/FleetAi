@@ -84,8 +84,9 @@ export default function Header() {
       <NavLink to="/" className="flex items-center group mr-8">
         <img
           src="/logo.png"
-          alt="LeasePlan"
-          className="h-10 w-auto object-contain"
+          alt="LeaseIQ"
+          className="h-16 w-auto object-contain"
+          style={{ mixBlendMode: 'lighten' }}
         />
       </NavLink>
 
@@ -151,6 +152,33 @@ export default function Header() {
                   </>
                 )}
               </div>
+            );
+          }
+
+          // Render AI Assistant with image
+          if (item.name === 'AI Assistant') {
+            return (
+              <NavLink
+                key={item.name}
+                to={item.href}
+                className={cn(
+                  'relative px-2 py-1 transition-all duration-200 rounded-lg group flex items-center',
+                  active
+                    ? 'bg-white/10'
+                    : 'hover:bg-white/5'
+                )}
+              >
+                <img
+                  src="/leabot.png"
+                  alt="AI Assistant"
+                  className="h-14 w-auto object-contain"
+                  style={{ mixBlendMode: 'lighten' }}
+                />
+                {/* Active indicator - orange underline */}
+                {active && (
+                  <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-brand-orange rounded-full" />
+                )}
+              </NavLink>
             );
           }
 

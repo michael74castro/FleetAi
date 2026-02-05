@@ -144,12 +144,16 @@ export default function AIAssistantPage() {
           {currentConversation?.messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full">
               <div className="relative mb-6">
-                <div className="absolute inset-0 bg-brand-orange rounded-full blur-3xl opacity-30 animate-pulse-glow" />
-                <div className="relative flex h-24 w-24 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-orange/20 to-brand-amber/20 border border-brand-orange/30">
-                  <Sparkles className="h-12 w-12 text-brand-orange" />
-                </div>
+                <img
+                  src="/leabot-avatar.png"
+                  alt="Lea AI Assistant"
+                  className="relative h-[640px] w-auto object-contain"
+                  style={{ mixBlendMode: 'lighten' }}
+                />
               </div>
-              <h2 className="text-2xl font-bold text-white mb-2">MyFleet AI Assistant</h2>
+              <h2 className="text-2xl font-bold text-white mb-2">
+                I'm <span className="text-brand-orange italic">Lea</span> your AI assistant
+              </h2>
               <p className="text-white/50 text-center max-w-md mb-8">
                 Ask me anything about your fleet data. I can help you analyze metrics,
                 generate reports, and provide intelligent insights.
@@ -158,7 +162,7 @@ export default function AIAssistantPage() {
               <div className="grid gap-3 sm:grid-cols-2 max-w-xl w-full">
                 {[
                   { icon: Code, text: 'Show me the total number of vehicles by status' },
-                  { icon: Lightbulb, text: 'What are the top 5 customers by fuel consumption?' },
+                  { icon: Lightbulb, text: 'Provide the total number of renewals for the next 6 months' },
                   { icon: Code, text: 'Show contracts expiring in the next 30 days' },
                   { icon: Lightbulb, text: 'Generate insights about maintenance costs' },
                 ].map((suggestion, index) => (
@@ -168,8 +172,8 @@ export default function AIAssistantPage() {
                     className="glass-card flex items-start space-x-3 p-4 text-left group hover:scale-[1.02] transition-all duration-200"
                     style={{ animationDelay: `${index * 100}ms` }}
                   >
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-cyan/20 group-hover:bg-brand-cyan/30 transition-colors">
-                      <suggestion.icon className="h-4 w-4 text-brand-cyan" />
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors" style={{ backgroundColor: 'rgba(169, 201, 14, 0.2)' }}>
+                      <suggestion.icon className="h-4 w-4" style={{ color: '#a9c90e' }} />
                     </div>
                     <span className="text-sm text-white/70 group-hover:text-white/90 transition-colors">{suggestion.text}</span>
                   </button>
@@ -187,17 +191,17 @@ export default function AIAssistantPage() {
                   {/* Message bubble */}
                   <div className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     <div className={`flex items-start space-x-3 max-w-[80%] ${message.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''}`}>
-                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
-                        message.role === 'user'
-                          ? 'bg-gradient-to-br from-brand-orange to-brand-amber'
-                          : 'bg-gradient-to-br from-brand-cyan/30 to-brand-cyan/20 border border-brand-cyan/30'
-                      }`}>
-                        {message.role === 'user' ? (
+                      {message.role === 'user' ? (
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-orange to-brand-amber">
                           <User className="h-4 w-4 text-white" />
-                        ) : (
-                          <Bot className="h-4 w-4 text-brand-cyan" />
-                        )}
-                      </div>
+                        </div>
+                      ) : (
+                        <img
+                          src="/bot-avatar.png"
+                          alt="Lea"
+                          className="h-9 w-9 shrink-0 rounded-xl object-cover"
+                        />
+                      )}
                       <div
                         className={`rounded-2xl px-5 py-3 ${
                           message.role === 'user'
@@ -206,7 +210,13 @@ export default function AIAssistantPage() {
                         }`}
                       >
                         <p className="text-sm whitespace-pre-wrap text-white/90">
-                          {typeof message.content === 'string' ? message.content : JSON.stringify(message.content)}
+                          {typeof message.content === 'string'
+                            ? message.content.split(/(\*\*Notable:\*\*|\*\*Notable\*\*)/gi).map((part, i) =>
+                                part.match(/^\*\*Notable:?\*\*$/i)
+                                  ? <span key={i} style={{ color: '#a9c90e', fontWeight: 'bold' }}>Notable:</span>
+                                  : part
+                              )
+                            : JSON.stringify(message.content)}
                         </p>
                         {message.metadata && typeof message.metadata === 'object' && message.metadata.sql && (
                           <pre className="mt-3 p-3 bg-black/30 rounded-xl text-xs overflow-x-auto border border-white/10">
@@ -267,9 +277,11 @@ export default function AIAssistantPage() {
               {isSending && (
                 <div className="flex justify-start animate-fade-in">
                   <div className="flex items-start space-x-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-cyan/30 to-brand-cyan/20 border border-brand-cyan/30">
-                      <Bot className="h-4 w-4 text-brand-cyan" />
-                    </div>
+                    <img
+                      src="/bot-avatar.png"
+                      alt="Lea"
+                      className="h-9 w-9 shrink-0 rounded-xl object-cover"
+                    />
                     <div className="glass border-brand-cyan/20 rounded-2xl px-5 py-4">
                       <div className="flex space-x-1.5">
                         <div className="w-2 h-2 bg-brand-cyan rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -293,7 +305,8 @@ export default function AIAssistantPage() {
               <button
                 key={index}
                 onClick={() => handleSuggestionClick(suggestion)}
-                className="glass-button text-xs px-4 py-2 rounded-full text-white/70 hover:text-white transition-colors"
+                className="glass-button text-xs px-4 py-2 rounded-full transition-colors hover:opacity-80"
+                style={{ color: '#a9c90e', borderColor: 'rgba(169, 201, 14, 0.3)' }}
               >
                 {suggestion}
               </button>
