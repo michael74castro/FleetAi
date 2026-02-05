@@ -1400,12 +1400,11 @@ ORDER BY es.reporting_period"""
             future_months = None  # Will calculate from contract end date
 
         try:
-            # Get current book value history
+            # Get current book value history (no currency_code - we always use AED)
             sql = f"""
             SELECT
                 cr.reporting_period,
-                cr.current_book_value as book_value,
-                cr.currency_code
+                cr.current_book_value as book_value
             FROM fact_car_reports cr
             WHERE cr.vehicle_id = {vehicle_id_str}
               AND cr.current_book_value IS NOT NULL
@@ -1423,8 +1422,7 @@ ORDER BY es.reporting_period"""
                 sql_lookup = f"""
                 SELECT
                     cr.reporting_period,
-                    cr.current_book_value as book_value,
-                    cr.currency_code
+                    cr.current_book_value as book_value
                 FROM fact_car_reports cr
                 JOIN dim_vehicle v ON cr.vehicle_id = v.vehicle_id
                 WHERE v.registration_number = '{vehicle_id_str}'
@@ -1460,15 +1458,22 @@ ORDER BY es.reporting_period"""
             dep_row = dep_result.fetchone()
             monthly_depreciation = dep_row[0] if dep_row else 0
 
-            # Format history for display
+            # Format history for display and chart
             month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June',
                           'July', 'August', 'September', 'October', 'November', 'December']
+            chart_data = []
             for row in history:
                 period = row.get('reporting_period', 0)
                 if period:
                     year = period // 100
                     month = period % 100
-                    row['month'] = f"{month_names[month]} {year}"
+                    month_str = f"{month_names[month]} {year}"
+                    # Create clean data for chart (only month and book_value)
+                    chart_data.append({
+                        'month': month_str,
+                        'book_value': row.get('book_value', 0)
+                    })
+                    row['month'] = month_str
 
             # Build response message
             summary_lines = []
@@ -1496,9 +1501,9 @@ ORDER BY es.reporting_period"""
                     message += f"- Projected Book Value: **{currency} {future_book_value:,.2f}**\n"
                     message += f"- Total Depreciation: {currency} {future_months * monthly_depreciation:,.2f}"
 
-            logger.info(f"Book value handler returning {len(history)} months of data for vehicle {vehicle_id_str}")
+            logger.info(f"Book value handler returning {len(chart_data)} months of data for vehicle {vehicle_id_str}")
             return {
-                "data": list(reversed(history)),  # Chronological order for charts
+                "data": list(reversed(chart_data)),  # Chronological order for charts
                 "message": message
             }
 
