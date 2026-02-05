@@ -545,6 +545,16 @@ CREATE TABLE IF NOT EXISTS fact_car_reports (
     report_key INTEGER PRIMARY KEY AUTOINCREMENT,
     vehicle_id INTEGER,
     reporting_period INTEGER,
+    -- Book Value & Depreciation
+    book_value_begin_amount REAL,       -- Book value at beginning of period
+    book_value_begin_lt REAL,           -- Book value begin (local transformation)
+    first_start_book_value REAL,        -- Original budgeted investment / initial book value
+    disinvestment_amount REAL,          -- Monthly depreciation / write-down amount
+    disinvestment_lt REAL,              -- Disinvestment (local transformation)
+    gain_amount REAL,                   -- Residual value gain/loss
+    gain_lt REAL,                       -- Gain (local transformation)
+    first_start_interest_rate REAL,     -- Initial interest rate at contract start
+    -- Running Costs
     fuel_cost_total REAL,
     maintenance_cost_total REAL,
     replacement_car_cost_total REAL,

@@ -612,7 +612,13 @@ def load_fact_car_reports(conn):
     cursor.execute("DELETE FROM fact_car_reports")
     cursor.execute("""
         INSERT INTO fact_car_reports (
-            vehicle_id, reporting_period, fuel_cost_total, maintenance_cost_total,
+            vehicle_id, reporting_period,
+            -- Book Value & Depreciation
+            book_value_begin_amount, book_value_begin_lt, first_start_book_value,
+            disinvestment_amount, disinvestment_lt, gain_amount, gain_lt,
+            first_start_interest_rate,
+            -- Running Costs
+            fuel_cost_total, maintenance_cost_total,
             replacement_car_cost_total, tyre_cost_total,
             fuel_invoice_total, maintenance_invoice_total,
             replacement_car_invoice_total, tyre_invoice_total,
@@ -622,7 +628,13 @@ def load_fact_car_reports(conn):
             damage_count, total_surplus, country_code, currency_code
         )
         SELECT
-            object_no, reporting_period, fuel_cost_total, maintenance_cost_total,
+            object_no, reporting_period,
+            -- Book Value & Depreciation
+            book_value_begin_amount, book_value_begin_lt, first_start_book_value,
+            disinvestment_amount, disinvestment_lt, gain_amount, gain_lt,
+            first_start_interest_rate,
+            -- Running Costs
+            fuel_cost_total, maintenance_cost_total,
             replacement_car_cost_total, tyre_cost_total,
             fuel_invoice_total, maintenance_invoice_total,
             replacement_car_invoice_total, tyre_invoice_total,
@@ -674,7 +686,7 @@ def populate_metadata_catalog(conn):
         ('fact_exploitation_services', 'Monthly Service Costs & Invoices', 'Monthly cost and invoice amounts (AED) for each vehicle by exploitation/service type. ALWAYS use this table for per-month cost/invoice queries. service_code identifies the service type (e.g. 580=Maintenance, 581=Tyres, 100=Insurance). Look up service descriptions via ref_domain_translation (domain_id=5).', 'Financial', 'One row per vehicle per service type per month', 'What is the maintenance cost/invoice per month? Monthly costs by service type? How much was invoiced for tyres? Total service costs for a vehicle?'),
         ('fact_passed_invoices', 'Passed On Invoices', 'Invoice items passed on to customers for vehicle-related costs', 'Financial', 'One row per passed invoice line', 'Passed invoice amounts? Invoices by customer?'),
         ('fact_replacement_cars', 'Replacement Cars', 'Records of replacement/courtesy cars provided when vehicles are in service', 'Operations', 'One row per replacement car usage', 'Replacement car usage? How long are replacements? Replacement car costs?'),
-        ('fact_car_reports', 'Vehicle Cost Reports', 'Monthly snapshot of all vehicle costs including fuel, maintenance, tyres, and replacement cars with running totals and per-km analysis', 'Financial', 'One row per vehicle per reporting period', 'Total cost of ownership? Vehicle running costs? Cost per km? Fuel consumption trends? Which vehicles cost the most?'),
+        ('fact_car_reports', 'Vehicle Cost Reports', 'Monthly snapshot of all vehicle costs including fuel, maintenance, tyres, replacement cars, AND book value/depreciation with running totals and per-km analysis', 'Financial', 'One row per vehicle per reporting period', 'Total cost of ownership? Vehicle running costs? Cost per km? Fuel consumption trends? Which vehicles cost the most? What is the book value of vehicle X? Show depreciation for vehicle Y? Current book value by customer? Vehicle depreciation trends?'),
         ('view_maintenance_analysis', 'Maintenance Analysis', 'Detailed view of maintenance events with vehicle and supplier details', 'Maintenance', 'One row per maintenance event', 'Maintenance details with vehicle info? Supplier maintenance history?'),
         ('view_vehicle_cost_analysis', 'Vehicle Cost Analysis', 'Vehicle cost breakdown from monthly car reports', 'Financial', 'One row per vehicle per period', 'Vehicle cost breakdown? Running costs by vehicle?'),
         ('view_supplier_summary', 'Supplier Summary', 'Aggregated supplier statistics including total spending and vehicles serviced', 'Supplier', 'One row per supplier', 'Top suppliers by spending? How many vehicles does each supplier service?'),
@@ -770,6 +782,12 @@ def populate_metadata_catalog(conn):
         ('fact_car_reports', 'maintenance_cost_total', 'Maintenance Cost Rate', 'Maintenance cost per km RATE (not AED total). Multiply by km_driven to get AED. For monthly AED amounts use fact_exploitation_services instead.', 'REAL', None, 'Per-km rate, NOT AED. Use fact_exploitation_services for actual monthly AED amounts.', 1, 0, 0),
         ('fact_car_reports', 'fuel_consumption', 'Fuel Consumption', 'Fuel consumption rate for the vehicle', 'REAL', None, None, 1, 0, 0),
         ('fact_car_reports', 'total_surplus', 'Total Surplus (AED)', 'Surplus amount in AED (invoiced minus actual cost)', 'REAL', None, 'Actual AED amount', 1, 0, 0),
+        # Book Value & Depreciation
+        ('fact_car_reports', 'book_value_begin_amount', 'Book Value (Beginning)', 'Book value of the vehicle at the beginning of the reporting period in AED', 'REAL', None, 'Actual AED amount. Decreases each month by disinvestment_amount.', 1, 0, 0),
+        ('fact_car_reports', 'first_start_book_value', 'Original Book Value', 'The original budgeted investment / initial book value at contract start in AED. This is the purchase price used for depreciation calculation.', 'REAL', None, 'Actual AED amount. Same as purchase_price / investment_amount.', 1, 0, 0),
+        ('fact_car_reports', 'disinvestment_amount', 'Depreciation Amount', 'Monthly depreciation / write-down amount that reduces the book value in AED', 'REAL', None, 'Actual AED amount. Sum over time to get cumulative depreciation.', 1, 0, 0),
+        ('fact_car_reports', 'gain_amount', 'Residual Gain/Loss', 'Gain or loss on residual value in AED, typically realized at end of lease', 'REAL', None, 'Actual AED amount. Positive = gain, Negative = loss.', 1, 0, 0),
+        ('fact_car_reports', 'first_start_interest_rate', 'Initial Interest Rate', 'Interest rate applied at contract start for lease calculations', 'REAL', None, 'Rate as decimal or percentage depending on source', 1, 0, 0),
 
         # Exploitation Services
         ('fact_exploitation_services', 'vehicle_id', 'Vehicle ID', 'Vehicle this service belongs to (links to dim_vehicle)', 'INTEGER', None, None, 0, 1, 0),
@@ -855,6 +873,12 @@ def populate_metadata_catalog(conn):
         ('Car Report', 'A monthly snapshot of all running costs for a vehicle including fuel, maintenance, tyres, and replacement cars, with cumulative totals and per-km analysis', 'vehicle report, cost report, running cost, TCO, total cost of ownership', 'fact_car_reports', None),
         ('Cost Per Km', 'The total running cost of a vehicle divided by kilometers driven, a key efficiency metric', 'cost per kilometer, running cost rate, unit cost', 'fact_car_reports', 'total_cost / km_driven'),
         ('Passed Invoice', 'An invoice line item that has been passed on (charged) to the customer for vehicle-related costs', 'recharged invoice, customer charge, pass-through cost', 'fact_passed_invoices', None),
+        ('Book Value', 'The current accounting value of a vehicle after depreciation. Starts at the original purchase/investment amount and decreases monthly by the disinvestment (depreciation) amount.', 'net book value, NBV, carrying value, asset value, accounting value', 'fact_car_reports, dim_vehicle', 'first_start_book_value - SUM(disinvestment_amount)'),
+        ('First Start Book Value', 'The original budgeted investment amount for a vehicle at the start of the lease/contract. This is the initial book value before any depreciation.', 'original cost, purchase price, investment amount, initial book value, budgeted investment', 'fact_car_reports', None),
+        ('Disinvestment Amount', 'The monthly depreciation or write-down amount that reduces the book value of a vehicle. This represents the loss in value over time.', 'depreciation, monthly depreciation, write-down, book value reduction', 'fact_car_reports', None),
+        ('Gain Amount', 'The gain or loss on the residual value of a vehicle, typically realized at end of lease when comparing actual sale price to expected residual value.', 'residual gain, residual loss, disposal gain, end of lease gain', 'fact_car_reports', None),
+        ('Current Book Value', 'The book value of a vehicle at the current reporting period, calculated as the beginning book value minus cumulative depreciation.', 'NBV, net book value, current value, depreciated value', 'fact_car_reports', 'book_value_begin_amount (for current period) or first_start_book_value - SUM(disinvestment_amount)'),
+        ('Total Cost of Ownership', 'The complete cost of owning/leasing a vehicle including depreciation, running costs (fuel, maintenance, tyres), insurance, and all other expenses over its lifecycle.', 'TCO, lifetime cost, ownership cost, fleet cost', 'fact_car_reports, dim_vehicle', 'SUM(total_cost) + SUM(disinvestment_amount)'),
     ]
 
     cursor.executemany("""
