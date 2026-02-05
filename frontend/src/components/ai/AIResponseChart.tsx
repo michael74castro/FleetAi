@@ -180,11 +180,19 @@ export default function AIResponseChart({ data, chartConfig }: AIResponseChartPr
             <LineChart data={data} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
               <GlowFilters />
               <XAxis dataKey={xKey} tick={AXIS_STYLE} stroke="transparent" axisLine={false} tickLine={false} />
-              <YAxis tick={AXIS_STYLE} stroke="transparent" axisLine={false} tickLine={false} />
+              <YAxis
+                tick={AXIS_STYLE}
+                stroke="transparent"
+                axisLine={false}
+                tickLine={false}
+                domain={['dataMin * 0.95', 'dataMax * 1.02']}
+                tickFormatter={(value) => value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value}
+              />
               <Tooltip
                 contentStyle={TOOLTIP_STYLE}
                 labelStyle={TOOLTIP_LABEL_STYLE}
                 itemStyle={TOOLTIP_ITEM_STYLE}
+                formatter={(value: number) => value.toLocaleString()}
               />
               <Legend wrapperStyle={{ fontSize: '12px', color: 'rgba(255,255,255,0.8)' }} />
               {yKeys.map((key, i) => (
@@ -221,11 +229,19 @@ export default function AIResponseChart({ data, chartConfig }: AIResponseChartPr
             <AreaChart data={data} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
               <GlowFilters />
               <XAxis dataKey={xKey} tick={AXIS_STYLE} stroke="transparent" axisLine={false} tickLine={false} />
-              <YAxis tick={AXIS_STYLE} stroke="transparent" axisLine={false} tickLine={false} />
+              <YAxis
+                tick={AXIS_STYLE}
+                stroke="transparent"
+                axisLine={false}
+                tickLine={false}
+                domain={['dataMin * 0.95', 'dataMax * 1.02']}
+                tickFormatter={(value) => value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value}
+              />
               <Tooltip
                 contentStyle={TOOLTIP_STYLE}
                 labelStyle={TOOLTIP_LABEL_STYLE}
                 itemStyle={TOOLTIP_ITEM_STYLE}
+                formatter={(value: number) => value.toLocaleString()}
               />
               <Legend wrapperStyle={{ fontSize: '12px', color: 'rgba(255,255,255,0.8)' }} />
               {yKeys.map((key, i) => (
