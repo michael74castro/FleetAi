@@ -546,9 +546,9 @@ CREATE TABLE IF NOT EXISTS fact_car_reports (
     vehicle_id INTEGER,
     reporting_period INTEGER,
     -- Book Value & Depreciation
-    book_value_begin_amount REAL,       -- Book value at beginning of period
+    book_value_begin_amount REAL,       -- Book value at beginning of period (legacy field)
     book_value_begin_lt REAL,           -- Book value begin (local transformation)
-    first_start_book_value REAL,        -- Original budgeted investment / initial book value
+    current_book_value REAL,            -- Current book value for this reporting period (from CCCR CRFSBV)
     disinvestment_amount REAL,          -- Monthly depreciation / write-down amount
     disinvestment_lt REAL,              -- Disinvestment (local transformation)
     gain_amount REAL,                   -- Residual value gain/loss

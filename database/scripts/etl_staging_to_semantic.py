@@ -614,7 +614,7 @@ def load_fact_car_reports(conn):
         INSERT INTO fact_car_reports (
             vehicle_id, reporting_period,
             -- Book Value & Depreciation
-            book_value_begin_amount, book_value_begin_lt, first_start_book_value,
+            book_value_begin_amount, book_value_begin_lt, current_book_value,
             disinvestment_amount, disinvestment_lt, gain_amount, gain_lt,
             first_start_interest_rate,
             -- Running Costs
@@ -629,7 +629,7 @@ def load_fact_car_reports(conn):
         )
         SELECT
             object_no, reporting_period,
-            -- Book Value & Depreciation
+            -- Book Value & Depreciation (first_start_book_value is actually current book value per period)
             book_value_begin_amount, book_value_begin_lt, first_start_book_value,
             disinvestment_amount, disinvestment_lt, gain_amount, gain_lt,
             first_start_interest_rate,
@@ -783,11 +783,11 @@ def populate_metadata_catalog(conn):
         ('fact_car_reports', 'fuel_consumption', 'Fuel Consumption', 'Fuel consumption rate for the vehicle', 'REAL', None, None, 1, 0, 0),
         ('fact_car_reports', 'total_surplus', 'Total Surplus (AED)', 'Surplus amount in AED (invoiced minus actual cost)', 'REAL', None, 'Actual AED amount', 1, 0, 0),
         # Book Value & Depreciation
-        ('fact_car_reports', 'book_value_begin_amount', 'Book Value (Beginning)', 'Book value of the vehicle at the beginning of the reporting period in AED', 'REAL', None, 'Actual AED amount. Decreases each month by disinvestment_amount.', 1, 0, 0),
-        ('fact_car_reports', 'first_start_book_value', 'Original Book Value', 'The original budgeted investment / initial book value at contract start in AED. This is the purchase price used for depreciation calculation.', 'REAL', None, 'Actual AED amount. Same as purchase_price / investment_amount.', 1, 0, 0),
-        ('fact_car_reports', 'disinvestment_amount', 'Depreciation Amount', 'Monthly depreciation / write-down amount that reduces the book value in AED', 'REAL', None, 'Actual AED amount. Sum over time to get cumulative depreciation.', 1, 0, 0),
-        ('fact_car_reports', 'gain_amount', 'Residual Gain/Loss', 'Gain or loss on residual value in AED, typically realized at end of lease', 'REAL', None, 'Actual AED amount. Positive = gain, Negative = loss.', 1, 0, 0),
-        ('fact_car_reports', 'first_start_interest_rate', 'Initial Interest Rate', 'Interest rate applied at contract start for lease calculations', 'REAL', None, 'Rate as decimal or percentage depending on source', 1, 0, 0),
+        ('fact_car_reports', 'current_book_value', 'Current Book Value', 'The book value of the vehicle for this specific reporting period. This is the key field for book value queries - it shows the depreciated value at each month. To calculate future book value, subtract monthly depreciation (from exploitation service code 11) for each future month.', 'REAL', '171112.20, 85500.00', 'Actual currency amount. Decreases each month by monthly depreciation. Use fact_exploitation_services service_code=11 to get monthly depreciation rate.', 1, 0, 0),
+        ('fact_car_reports', 'book_value_begin_amount', 'Book Value (Legacy)', 'Legacy book value field from older reporting periods', 'REAL', None, 'May be zero for recent periods. Use current_book_value instead.', 1, 0, 0),
+        ('fact_car_reports', 'disinvestment_amount', 'Disinvestment Amount', 'Disinvestment amount field (legacy). For monthly depreciation, use exploitation service code 11 instead.', 'REAL', None, 'Legacy field. Use fact_exploitation_services service_code=11 for actual monthly depreciation.', 1, 0, 0),
+        ('fact_car_reports', 'gain_amount', 'Residual Gain/Loss', 'Gain or loss on residual value, typically realized at end of lease', 'REAL', None, 'Actual currency amount. Positive = gain, Negative = loss.', 1, 0, 0),
+        ('fact_car_reports', 'first_start_interest_rate', 'Interest Rate', 'Interest rate component for lease calculations', 'REAL', None, 'Rate value', 1, 0, 0),
 
         # Exploitation Services
         ('fact_exploitation_services', 'vehicle_id', 'Vehicle ID', 'Vehicle this service belongs to (links to dim_vehicle)', 'INTEGER', None, None, 0, 1, 0),
@@ -873,12 +873,11 @@ def populate_metadata_catalog(conn):
         ('Car Report', 'A monthly snapshot of all running costs for a vehicle including fuel, maintenance, tyres, and replacement cars, with cumulative totals and per-km analysis', 'vehicle report, cost report, running cost, TCO, total cost of ownership', 'fact_car_reports', None),
         ('Cost Per Km', 'The total running cost of a vehicle divided by kilometers driven, a key efficiency metric', 'cost per kilometer, running cost rate, unit cost', 'fact_car_reports', 'total_cost / km_driven'),
         ('Passed Invoice', 'An invoice line item that has been passed on (charged) to the customer for vehicle-related costs', 'recharged invoice, customer charge, pass-through cost', 'fact_passed_invoices', None),
-        ('Book Value', 'The current accounting value of a vehicle after depreciation. Starts at the original purchase/investment amount and decreases monthly by the disinvestment (depreciation) amount.', 'net book value, NBV, carrying value, asset value, accounting value', 'fact_car_reports, dim_vehicle', 'first_start_book_value - SUM(disinvestment_amount)'),
-        ('First Start Book Value', 'The original budgeted investment amount for a vehicle at the start of the lease/contract. This is the initial book value before any depreciation.', 'original cost, purchase price, investment amount, initial book value, budgeted investment', 'fact_car_reports', None),
-        ('Disinvestment Amount', 'The monthly depreciation or write-down amount that reduces the book value of a vehicle. This represents the loss in value over time.', 'depreciation, monthly depreciation, write-down, book value reduction', 'fact_car_reports', None),
-        ('Gain Amount', 'The gain or loss on the residual value of a vehicle, typically realized at end of lease when comparing actual sale price to expected residual value.', 'residual gain, residual loss, disposal gain, end of lease gain', 'fact_car_reports', None),
-        ('Current Book Value', 'The book value of a vehicle at the current reporting period, calculated as the beginning book value minus cumulative depreciation.', 'NBV, net book value, current value, depreciated value', 'fact_car_reports', 'book_value_begin_amount (for current period) or first_start_book_value - SUM(disinvestment_amount)'),
-        ('Total Cost of Ownership', 'The complete cost of owning/leasing a vehicle including depreciation, running costs (fuel, maintenance, tyres), insurance, and all other expenses over its lifecycle.', 'TCO, lifetime cost, ownership cost, fleet cost', 'fact_car_reports, dim_vehicle', 'SUM(total_cost) + SUM(disinvestment_amount)'),
+        ('Book Value', 'The current accounting value of a vehicle after depreciation. Found in fact_car_reports.current_book_value for each reporting period. Decreases monthly by the depreciation amount from exploitation service code 11.', 'net book value, NBV, carrying value, asset value, accounting value, book value', 'fact_car_reports', 'SELECT current_book_value FROM fact_car_reports WHERE vehicle_id = X ORDER BY reporting_period DESC LIMIT 1'),
+        ('Current Book Value', 'The book value of a vehicle for a specific reporting period. This is stored in fact_car_reports.current_book_value. For future periods, calculate as: latest_book_value - (months_ahead * monthly_depreciation) where monthly_depreciation comes from exploitation service code 11.', 'NBV, net book value, current value, depreciated value', 'fact_car_reports, fact_exploitation_services', 'current_book_value - (months * service_code_11_monthly_cost)'),
+        ('Monthly Depreciation', 'The monthly depreciation amount that reduces the book value. Found in fact_exploitation_services with service_code = 11. This is used to calculate future book values.', 'depreciation, monthly depreciation, depreciation rate', 'fact_exploitation_services', 'SELECT total_monthly_cost FROM fact_exploitation_services WHERE vehicle_id = X AND service_code = 11 ORDER BY reporting_period DESC LIMIT 1'),
+        ('Future Book Value', 'Projected book value for future periods. Calculate as: current_book_value - (number_of_months * monthly_depreciation). Get current_book_value from fact_car_reports and monthly_depreciation from fact_exploitation_services service_code 11.', 'projected book value, forecast book value, estimated book value', 'fact_car_reports, fact_exploitation_services', 'current_book_value - (months_ahead * monthly_depreciation_from_service_11)'),
+        ('Total Cost of Ownership', 'The complete cost of owning/leasing a vehicle including depreciation (service code 11), running costs (fuel, maintenance, tyres), insurance, and all other expenses over its lifecycle.', 'TCO, lifetime cost, ownership cost, fleet cost', 'fact_car_reports, fact_exploitation_services', 'SUM of all exploitation services costs'),
     ]
 
     cursor.executemany("""

@@ -169,6 +169,17 @@ class AIService:
                     result["suggestions"] = self._generate_suggestions(user_message, user_context)
                     return result
 
+                # Check for book value queries
+                book_value_result = await self._handle_book_value_query(user_message.lower())
+                if book_value_result:
+                    result["data"] = book_value_result["data"]
+                    result["message"] = book_value_result["message"]
+                    chart_config = self._detect_chart_config(result["data"], user_message)
+                    if chart_config:
+                        result["chart_config"] = chart_config
+                    result["suggestions"] = self._generate_suggestions(user_message, user_context)
+                    return result
+
                 # Build conversation context for SQL generation
                 conversation_context = "\n".join([
                     f"{msg.role}: {msg.content}"
@@ -1341,6 +1352,149 @@ ORDER BY es.reporting_period"""
 
         except Exception as e:
             logger.error(f"Service cost query failed: {e}")
+            return None
+
+    async def _handle_book_value_query(self, query_lower: str) -> dict | None:
+        """Handle book value queries using fact_car_reports and fact_exploitation_services.
+
+        Book value is stored in fact_car_reports.current_book_value for each reporting period.
+        Monthly depreciation comes from fact_exploitation_services with service_code = 11.
+        Future book value = current_book_value - (months_ahead * monthly_depreciation)
+        """
+
+        # Detect book value queries
+        book_value_keywords = ['book value', 'bookvalue', 'nbv', 'net book value',
+                               'depreciation', 'depreciate', 'asset value', 'carrying value']
+
+        has_book_value = any(kw in query_lower for kw in book_value_keywords)
+        if not has_book_value:
+            return None
+
+        # Extract vehicle identifier
+        vehicle_match = re.search(r'(?:vehicle|object|reg|car)[\s#:]*(?:number\s+)?(\d{4,8})', query_lower)
+        if not vehicle_match:
+            vehicle_match = re.search(r'(?:for|of)\s+(\d{5,8})', query_lower)
+        if not vehicle_match:
+            # Try standalone number
+            vehicle_match = re.search(r'\b(\d{6,8})\b', query_lower)
+        if not vehicle_match:
+            return None
+
+        vehicle_id_str = vehicle_match.group(1)
+
+        # Check for future projection request
+        is_future = any(kw in query_lower for kw in ['future', 'project', 'forecast', 'next', 'will be', 'in 12 months', 'in 6 months', 'end of'])
+
+        # Determine number of months for future projection
+        future_months = 12  # default
+        m = re.search(r'(?:next|in)\s+(\d+)\s+month', query_lower)
+        if m:
+            future_months = int(m.group(1))
+        elif 'end of year' in query_lower or 'year end' in query_lower:
+            from datetime import datetime
+            current_month = datetime.now().month
+            future_months = 12 - current_month + 1
+        elif 'end of contract' in query_lower or 'lease end' in query_lower:
+            future_months = None  # Will calculate from contract end date
+
+        try:
+            # Get current book value history
+            sql = f"""
+            SELECT
+                cr.reporting_period,
+                cr.current_book_value as book_value,
+                cr.currency_code
+            FROM fact_car_reports cr
+            WHERE cr.vehicle_id = {vehicle_id_str}
+              AND cr.current_book_value IS NOT NULL
+              AND cr.current_book_value > 0
+            ORDER BY cr.reporting_period DESC
+            LIMIT 12
+            """
+
+            result = await self.db.execute(text(sql))
+            columns = list(result.keys())
+            history = [dict(zip(columns, row)) for row in result.fetchall()]
+
+            if not history:
+                # Try with registration number lookup
+                sql_lookup = f"""
+                SELECT
+                    cr.reporting_period,
+                    cr.current_book_value as book_value,
+                    cr.currency_code
+                FROM fact_car_reports cr
+                JOIN dim_vehicle v ON cr.vehicle_id = v.vehicle_id
+                WHERE v.registration_number = '{vehicle_id_str}'
+                  AND cr.current_book_value IS NOT NULL
+                  AND cr.current_book_value > 0
+                ORDER BY cr.reporting_period DESC
+                LIMIT 12
+                """
+                result = await self.db.execute(text(sql_lookup))
+                columns = list(result.keys())
+                history = [dict(zip(columns, row)) for row in result.fetchall()]
+
+            if not history:
+                return {
+                    "data": [],
+                    "message": f"No book value data found for vehicle {vehicle_id_str}."
+                }
+
+            latest_book_value = history[0]['book_value']
+            latest_period = history[0]['reporting_period']
+            currency = history[0].get('currency_code', 'AED')
+
+            # Get monthly depreciation from exploitation service code 11
+            sql_dep = f"""
+            SELECT total_monthly_cost as monthly_depreciation
+            FROM fact_exploitation_services
+            WHERE vehicle_id = {vehicle_id_str}
+              AND service_code = 11
+            ORDER BY reporting_period DESC
+            LIMIT 1
+            """
+            dep_result = await self.db.execute(text(sql_dep))
+            dep_row = dep_result.fetchone()
+            monthly_depreciation = dep_row[0] if dep_row else 0
+
+            # Format history for display
+            for row in history:
+                period = row.get('reporting_period', 0)
+                if period:
+                    year = period // 100
+                    month = period % 100
+                    row['month'] = f"{year}{month:02d}"
+
+            # Build response message
+            summary_lines = []
+            for r in history[:6]:  # Show last 6 months
+                month_str = r.get('month', str(r.get('reporting_period', '')))
+                bv = r.get('book_value', 0) or 0
+                summary_lines.append(f"- **{month_str}**: {currency} {bv:,.2f}")
+
+            message = f"**Book Value** for vehicle **{vehicle_id_str}**:\n\n"
+            message += f"**Latest Book Value** (Period {latest_period}): **{currency} {latest_book_value:,.2f}**\n"
+            message += f"**Monthly Depreciation** (Service Code 11): {currency} {monthly_depreciation:,.2f}\n\n"
+            message += "**Recent History:**\n" + "\n".join(summary_lines)
+
+            # Add future projection if requested
+            if is_future and monthly_depreciation > 0:
+                if future_months:
+                    future_book_value = latest_book_value - (future_months * monthly_depreciation)
+                    future_book_value = max(0, future_book_value)  # Can't go negative
+                    message += f"\n\n**Future Projection** ({future_months} months ahead):\n"
+                    message += f"- Projected Book Value: **{currency} {future_book_value:,.2f}**\n"
+                    message += f"- Total Depreciation: {currency} {future_months * monthly_depreciation:,.2f}"
+
+            logger.info(f"Book value handler returning {len(history)} months of data for vehicle {vehicle_id_str}")
+            return {
+                "data": list(reversed(history)),  # Chronological order for charts
+                "message": message
+            }
+
+        except Exception as e:
+            logger.error(f"Book value query failed: {e}")
             return None
 
     def _validate_sql_safety(self, sql: str) -> bool:
