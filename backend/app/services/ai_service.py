@@ -1314,12 +1314,14 @@ ORDER BY es.reporting_period"""
 
             if results:
                 # Format period for display
+                month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+                              'July', 'August', 'September', 'October', 'November', 'December']
                 for row in results:
                     period = row.get('reporting_period', 0)
                     if period:
                         year = period // 100
                         month = period % 100
-                        row['month'] = f"{year}{month:02d}"
+                        row['month'] = f"{month_names[month]} {year}"
 
                 # Build summary
                 total_cost = sum(r.get('cost_aed', 0) or 0 for r in results)
@@ -1459,12 +1461,14 @@ ORDER BY es.reporting_period"""
             monthly_depreciation = dep_row[0] if dep_row else 0
 
             # Format history for display
+            month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+                          'July', 'August', 'September', 'October', 'November', 'December']
             for row in history:
                 period = row.get('reporting_period', 0)
                 if period:
                     year = period // 100
                     month = period % 100
-                    row['month'] = f"{year}{month:02d}"
+                    row['month'] = f"{month_names[month]} {year}"
 
             # Build response message
             summary_lines = []
@@ -1473,9 +1477,14 @@ ORDER BY es.reporting_period"""
                 bv = r.get('book_value', 0) or 0
                 summary_lines.append(f"- **{month_str}**: {currency} {bv:,.2f}")
 
+            # Format latest period for display
+            latest_year = latest_period // 100
+            latest_month = latest_period % 100
+            latest_period_str = f"{month_names[latest_month]} {latest_year}"
+
             message = f"**Book Value** for vehicle **{vehicle_id_str}**:\n\n"
-            message += f"**Latest Book Value** (Period {latest_period}): **{currency} {latest_book_value:,.2f}**\n"
-            message += f"**Monthly Depreciation** (Service Code 11): {currency} {monthly_depreciation:,.2f}\n\n"
+            message += f"**Latest Book Value** ({latest_period_str}): **{currency} {latest_book_value:,.2f}**\n"
+            message += f"**Monthly Depreciation**: {currency} {monthly_depreciation:,.2f}\n\n"
             message += "**Recent History:**\n" + "\n".join(summary_lines)
 
             # Add future projection if requested
