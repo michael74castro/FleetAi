@@ -1443,7 +1443,7 @@ ORDER BY es.reporting_period"""
 
             latest_book_value = history[0]['book_value']
             latest_period = history[0]['reporting_period']
-            currency = history[0].get('currency_code', 'AED')
+            currency = 'AED'  # Always use AED for display
 
             # Get monthly depreciation from exploitation service code 11
             sql_dep = f"""
