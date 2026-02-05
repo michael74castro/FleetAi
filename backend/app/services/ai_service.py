@@ -180,6 +180,17 @@ class AIService:
                     result["suggestions"] = self._generate_suggestions(user_message, user_context)
                     return result
 
+                # Check for contract expiry queries
+                expiry_result = await self._handle_contract_expiry_query(user_message.lower())
+                if expiry_result:
+                    result["data"] = expiry_result["data"]
+                    result["message"] = expiry_result["message"]
+                    chart_config = self._detect_chart_config(result["data"], user_message)
+                    if chart_config:
+                        result["chart_config"] = chart_config
+                    result["suggestions"] = self._generate_suggestions(user_message, user_context)
+                    return result
+
                 # Build conversation context for SQL generation
                 conversation_context = "\n".join([
                     f"{msg.role}: {msg.content}"
@@ -1514,6 +1525,100 @@ ORDER BY es.reporting_period"""
 
         except Exception as e:
             logger.error(f"Book value query failed: {e}")
+            return None
+
+    async def _handle_contract_expiry_query(self, query_lower: str) -> dict | None:
+        """Handle contract expiry/renewal queries.
+
+        Returns vehicles expiring in the next N months with proper is_active filter.
+        """
+
+        # Detect expiry/renewal queries
+        expiry_keywords = ['expir', 'renew', 'ending', 'contract end', 'lease end',
+                          'due for renewal', 'coming up for renewal', 'contracts ending']
+
+        has_expiry = any(kw in query_lower for kw in expiry_keywords)
+        if not has_expiry:
+            return None
+
+        # Determine number of months (default 6)
+        months_ahead = 6
+        m = re.search(r'(?:next|in|within)\s+(\d+)\s+month', query_lower)
+        if m:
+            months_ahead = int(m.group(1))
+        elif '12 month' in query_lower or 'year' in query_lower:
+            months_ahead = 12
+        elif '3 month' in query_lower:
+            months_ahead = 3
+
+        try:
+            # Query vehicles expiring in the next N months (active only)
+            sql = f"""
+            SELECT
+                CASE
+                    WHEN days_to_contract_end BETWEEN 0 AND 30 THEN '0-1 Month'
+                    WHEN days_to_contract_end BETWEEN 31 AND 60 THEN '1-2 Months'
+                    WHEN days_to_contract_end BETWEEN 61 AND 90 THEN '2-3 Months'
+                    WHEN days_to_contract_end BETWEEN 91 AND 120 THEN '3-4 Months'
+                    WHEN days_to_contract_end BETWEEN 121 AND 150 THEN '4-5 Months'
+                    WHEN days_to_contract_end BETWEEN 151 AND 180 THEN '5-6 Months'
+                    WHEN days_to_contract_end BETWEEN 181 AND 210 THEN '6-7 Months'
+                    WHEN days_to_contract_end BETWEEN 211 AND 240 THEN '7-8 Months'
+                    WHEN days_to_contract_end BETWEEN 241 AND 270 THEN '8-9 Months'
+                    WHEN days_to_contract_end BETWEEN 271 AND 300 THEN '9-10 Months'
+                    WHEN days_to_contract_end BETWEEN 301 AND 330 THEN '10-11 Months'
+                    WHEN days_to_contract_end BETWEEN 331 AND 365 THEN '11-12 Months'
+                END as period,
+                COUNT(*) as vehicle_count
+            FROM dim_vehicle
+            WHERE days_to_contract_end BETWEEN 0 AND {months_ahead * 30}
+              AND is_active = 1
+            GROUP BY period
+            ORDER BY MIN(days_to_contract_end)
+            """
+
+            result = await self.db.execute(text(sql))
+            columns = list(result.keys())
+            results = [dict(zip(columns, row)) for row in result.fetchall() if row[0] is not None]
+
+            if not results:
+                return {
+                    "data": [],
+                    "message": f"No vehicles found expiring in the next {months_ahead} months."
+                }
+
+            # Calculate total
+            total = sum(r.get('vehicle_count', 0) for r in results)
+
+            # Find the peak period
+            peak = max(results, key=lambda x: x.get('vehicle_count', 0))
+            peak_period = peak.get('period', '')
+            peak_count = peak.get('vehicle_count', 0)
+
+            # Build message
+            message = f"**Vehicles Expiring in the Next {months_ahead} Months:**\n\n"
+            for r in results:
+                period = r.get('period', '')
+                count = r.get('vehicle_count', 0)
+                message += f"- **{period}**: {count:,} vehicles\n"
+
+            message += f"\n**Total: {total:,} vehicles**"
+
+            # Add Notable insight
+            message += f"\n\n**Notable:** {peak_period} has the highest volume with **{peak_count:,} vehicles** expiring"
+            if peak_count > total * 0.3:
+                message += " - this represents over 30% of expiring contracts. Prioritize renewal planning for this period."
+            else:
+                message += " - consider proactive renewal outreach for this period."
+
+            logger.info(f"Contract expiry handler returning {len(results)} periods, {total} total vehicles")
+            return {
+                "data": results,
+                "message": message
+            }
+
+        except Exception as e:
+            logger.error(f"Contract expiry query failed: {e}")
             return None
 
     def _validate_sql_safety(self, sql: str) -> bool:
