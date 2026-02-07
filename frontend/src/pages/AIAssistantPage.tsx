@@ -17,6 +17,7 @@ export default function AIAssistantPage() {
     loadConversation,
     startNewConversation,
     deleteConversation,
+    clearAllConversations,
     sendMessage,
   } = useAIStore();
 
@@ -91,6 +92,14 @@ export default function AIAssistantPage() {
     }
   };
 
+  const handleClearHistory = async () => {
+    if (conversations.length === 0) return;
+    if (confirm('Are you sure you want to clear all chat history?')) {
+      await clearAllConversations();
+      navigate('/assistant');
+    }
+  };
+
   return (
     <div className="flex h-[calc(100vh-8rem)] gap-6 animate-fade-in">
       {/* Sidebar */}
@@ -135,6 +144,18 @@ export default function AIAssistantPage() {
             </div>
           ))}
         </div>
+
+        {conversations.length > 0 && (
+          <div className="p-3 border-t border-white/10">
+            <button
+              onClick={handleClearHistory}
+              className="w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-xl text-white/50 hover:text-red-400 hover:bg-red-500/10 transition-all text-sm"
+            >
+              <Trash2 className="h-4 w-4" />
+              <span>Clear History</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Main chat area */}
@@ -209,15 +230,34 @@ export default function AIAssistantPage() {
                             : 'glass border-brand-cyan/20'
                         }`}
                       >
-                        <p className="text-sm whitespace-pre-wrap text-white/90">
+                        <div className="text-sm whitespace-pre-wrap text-white/90">
                           {typeof message.content === 'string'
-                            ? message.content.split(/(\*\*Notable:\*\*|\*\*Notable\*\*)/gi).map((part, i) =>
-                                part.match(/^\*\*Notable:?\*\*$/i)
-                                  ? <span key={i} style={{ color: '#a9c90e', fontWeight: 'bold' }}>Notable:</span>
-                                  : part
-                              )
+                            ? (() => {
+                                // Split content to separate the Notable section
+                                const notableMatch = message.content.match(/\*\*Notable:\*\*\s*([\s\S]*?)$/i);
+                                if (notableMatch) {
+                                  const beforeNotable = message.content.substring(0, message.content.indexOf('**Notable:**'));
+                                  const notableText = notableMatch[1];
+                                  return (
+                                    <>
+                                      <span>{beforeNotable}</span>
+                                      <div
+                                        className="mt-3 p-3 rounded-xl border"
+                                        style={{
+                                          backgroundColor: 'rgba(169, 201, 14, 0.1)',
+                                          borderColor: 'rgba(169, 201, 14, 0.3)'
+                                        }}
+                                      >
+                                        <span style={{ color: '#a9c90e', fontWeight: 'bold' }}>Notable: </span>
+                                        <span style={{ color: '#a9c90e' }}>{notableText.replace(/\*\*/g, '')}</span>
+                                      </div>
+                                    </>
+                                  );
+                                }
+                                return message.content;
+                              })()
                             : JSON.stringify(message.content)}
-                        </p>
+                        </div>
                         {message.metadata && typeof message.metadata === 'object' && message.metadata.sql && (
                           <pre className="mt-3 p-3 bg-black/30 rounded-xl text-xs overflow-x-auto border border-white/10">
                             <code className="text-brand-cyan">{message.metadata.sql}</code>

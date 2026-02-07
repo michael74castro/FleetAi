@@ -22,7 +22,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (isAuthenticated || api.isAuthenticated()) {
-      navigate('/dashboards');
+      navigate('/');
     }
   }, [isAuthenticated, navigate]);
 
@@ -35,7 +35,7 @@ export default function LoginPage() {
       await api.login(email, password);
       const user = await api.getCurrentUser();
       setUser(user);
-      navigate('/dashboards');
+      navigate('/');
     } catch (err: unknown) {
       const error = err as { response?: { data?: { detail?: string } } };
       setError(error.response?.data?.detail || 'Login failed. Please check your credentials.');
@@ -73,19 +73,16 @@ export default function LoginPage() {
       {/* Main content */}
       <div className="relative z-10 w-full max-w-md px-4 animate-fade-in-up">
         {/* Logo section */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center mb-6">
+        <div className="text-center mb-4">
+          <div className="inline-flex items-center justify-center mb-2">
             <img
               src="/logo.png"
-              alt="LeaseIQ"
+              alt="myLeaseAI"
               className="h-48 w-auto object-contain"
               style={{ mixBlendMode: 'lighten' }}
             />
           </div>
-          <h1 className="text-4xl font-bold text-white tracking-tight">
-            My<span className="text-gradient-orange">Fleet</span>
-          </h1>
-          <p className="mt-2 text-white/60 font-medium">
+          <p className="text-white/60 font-medium">
             AI-Powered Fleet Intelligence Platform
           </p>
         </div>

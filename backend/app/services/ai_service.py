@@ -310,12 +310,17 @@ class AIService:
                 dimension = match.group(1).lower()
                 col_name = dim_mapping.get(dimension, dimension)
 
+                # Check if user is asking for "active" vehicles
+                is_active_filter = 'active' in query_lower and table == 'dim_vehicle'
+                where_clause = "WHERE is_active = 1 " if is_active_filter else ""
+                active_desc = "active " if is_active_filter else ""
+
                 # Directly generate the aggregation SQL without calling the AI
-                direct_sql = f"SELECT {col_name}, COUNT(*) as {entity}_count FROM {table} GROUP BY {col_name} ORDER BY {entity}_count DESC"
+                direct_sql = f"SELECT {col_name}, COUNT(*) as {entity}_count FROM {table} {where_clause}GROUP BY {col_name} ORDER BY {entity}_count DESC"
 
                 result = {
                     "sql": direct_sql,
-                    "explanation": f"This query counts {entity} grouped by {dimension}.",
+                    "explanation": f"This query counts {active_desc}{entity} grouped by {dimension}.",
                     "is_safe": True,
                     "results": None,
                     "row_count": None
@@ -370,6 +375,7 @@ RULES:
 12. CRITICAL - "Registration expiry" vs "Contract expiry" are DIFFERENT: Vehicle registration expiry (government license plate renewal) is NOT tracked in this database. Contract/lease expiry (expected_end_date) IS available. If user asks about "registration expiring" or "license plate renewal", respond with JSON {{"sql": null, "explanation": "Vehicle registration expiry dates (government license plate renewal) are not tracked in this system. However, I can show you contract/lease expiration data. Would you like to see vehicles with contracts expiring soon instead?", "is_safe": true}}
 13. CRITICAL - For "by" or "per" or "breakdown" questions (e.g., "vehicles by status", "count by make", "breakdown by customer"), ALWAYS use GROUP BY and COUNT/SUM aggregations. Example: "vehicles by status" = SELECT vehicle_status, COUNT(*) as vehicle_count FROM dim_vehicle GROUP BY vehicle_status ORDER BY vehicle_count DESC
 14. CRITICAL - For visualization/chart queries, return aggregated data with clear dimension and measure columns. The result should have a categorical column (for x-axis) and numeric columns (for y-axis). Never return raw detail rows for chart queries.
+15. CRITICAL - Column names: Use EXACT column names from the schema. The column for vehicle make/manufacturer is "make_name" (NOT "manufacturer" or "make"). The column for vehicle model is "model_name" (NOT "model"). Example: "vehicles by make" = SELECT make_name, COUNT(*) as vehicle_count FROM dim_vehicle WHERE is_active = 1 GROUP BY make_name ORDER BY vehicle_count DESC
 
 User's role: {user_context.get('role', 'unknown')}
 Customer access: {user_context.get('customer_ids', 'all')}
@@ -959,6 +965,21 @@ Maintenance Approvals (fact_maintenance_approvals):
 - fact_odometer_reading (Odometer & Service Records): Mileage readings AND maintenance/service records. source_type = 'Service' for maintenance. transaction_description has repair details.  [grain: One row per reading/service event]
 - fact_billing (Billing Records): Billing transactions  [grain: One row per billing record]
 
+=== CRITICAL COLUMN NAMES (use EXACTLY these names) ===
+dim_vehicle columns:
+  - vehicle_id (PRIMARY KEY)
+  - registration_number (license plate)
+  - make_name (vehicle manufacturer - e.g. Toyota, Ford) - NEVER use "manufacturer" or "make", ALWAYS use "make_name"
+  - model_name (vehicle model - e.g. Camry, F-150) - NEVER use "model", ALWAYS use "model_name"
+  - customer_id, customer_name
+  - vehicle_status, vehicle_status_code, is_active
+  - fuel_code, lease_type
+  - expected_end_date, months_remaining, days_to_contract_end
+dim_customer columns:
+  - customer_id (PRIMARY KEY)
+  - customer_name
+  - account_manager
+
 === KEY RELATIONSHIPS ===
 - dim_vehicle.customer_id -> dim_customer.customer_id (many-to-one)
 - dim_driver.vehicle_id -> dim_vehicle.vehicle_id (many-to-one)
@@ -1200,7 +1221,12 @@ Guidelines:
                 col_name = dim_mapping.get(dimension, dimension)
                 count_col = f"{entity}_count"
 
-                sql = f"SELECT {col_name}, COUNT(*) as {count_col} FROM {table} GROUP BY {col_name} ORDER BY {count_col} DESC"
+                # Check if user is asking for "active" vehicles
+                is_active_filter = 'active' in query_lower and table == 'dim_vehicle'
+                where_clause = "WHERE is_active = 1 " if is_active_filter else ""
+                active_desc = "active " if is_active_filter else ""
+
+                sql = f"SELECT {col_name}, COUNT(*) as {count_col} FROM {table} {where_clause}GROUP BY {col_name} ORDER BY {count_col} DESC"
 
                 logger.info(f"Aggregation handler matched pattern for '{dimension}', executing: {sql}")
 
@@ -1216,7 +1242,7 @@ Guidelines:
                             count = r.get(count_col, 0)
                             summary_lines.append(f"- **{value}**: {count:,} {entity}")
 
-                        message = f"Here's the breakdown of {entity} by {dimension}:\n\n" + "\n".join(summary_lines)
+                        message = f"Here's the breakdown of {active_desc}{entity} by {dimension}:\n\n" + "\n".join(summary_lines)
                         if len(results) > 10:
                             message += f"\n\n...and {len(results) - 10} more categories."
 

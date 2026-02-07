@@ -23,6 +23,7 @@ interface AIState {
   // Chat
   sendMessage: (message: string) => Promise<ChatResponse>;
   clearMessages: () => void;
+  clearAllConversations: () => Promise<void>;
 
   // AI Features
   generateSQL: (query: string, execute?: boolean) => Promise<{ sql: string; results?: unknown[] }>;
@@ -168,6 +169,25 @@ export const useAIStore = create<AIState>((set, get) => ({
       lastResponse: null,
       suggestions: [],
     }));
+  },
+
+  clearAllConversations: async () => {
+    const { conversations } = get();
+    // Delete all conversations from the backend
+    await Promise.all(conversations.map((c) => api.deleteConversation(c.conversation_id)));
+    // Clear state and start fresh
+    set({
+      conversations: [],
+      currentConversation: {
+        conversation_id: 0,
+        title: 'New Conversation',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        messages: [],
+      },
+      lastResponse: null,
+      suggestions: [],
+    });
   },
 
   generateSQL: async (query, execute = false) => {

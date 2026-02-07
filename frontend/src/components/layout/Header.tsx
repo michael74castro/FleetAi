@@ -1,9 +1,10 @@
 import { useMsal } from '@azure/msal-react';
 import { User, LogOut, Settings, ChevronDown } from 'lucide-react';
-import { NavLink, Link, useLocation } from 'react-router-dom';
+import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { getInitials, cn } from '@/lib/utils';
 import { useState } from 'react';
+import { api } from '@/services/api';
 
 interface NavItem {
   name: string;
@@ -41,6 +42,7 @@ export default function Header() {
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const location = useLocation();
+  const navigate = useNavigate();
 
   const toggleDropdown = (name: string) => {
     setOpenDropdown(openDropdown === name ? null : name);
@@ -50,9 +52,16 @@ export default function Header() {
     setOpenDropdown(null);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await api.logout();
+    } catch (e) {
+      // Ignore logout API errors
+    }
     clearAuth();
-    instance.logoutRedirect();
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    navigate('/login');
   };
 
   const isActive = (href: string) => {
@@ -84,7 +93,7 @@ export default function Header() {
       <NavLink to="/" className="flex items-center group mr-8">
         <img
           src="/logo.png"
-          alt="LeaseIQ"
+          alt="myLeaseAI"
           className="h-16 w-auto object-contain"
           style={{ mixBlendMode: 'lighten' }}
         />
