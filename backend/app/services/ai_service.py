@@ -127,11 +127,12 @@ class AIService:
 
         try:
             # Generate response
+            # Lower temperature to reduce variability and improve consistency of answers.
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 max_tokens=2000,
-                temperature=0.7
+                temperature=0.2
             )
 
             assistant_message = response.choices[0].message.content

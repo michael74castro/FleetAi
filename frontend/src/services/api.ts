@@ -327,7 +327,8 @@ class ApiService {
   }
 
   async generateSQL(query: string, execute?: boolean) {
-    const response = await this.client.post('/ai/generate-sql', { query, execute });
+    // Backend route: POST /api/v1/ai/sql/generate
+    const response = await this.client.post('/ai/sql/generate', { query, execute });
     return response.data;
   }
 
@@ -342,12 +343,14 @@ class ApiService {
   }
 
   async suggestDashboardWidgets(dataset: string, description?: string) {
-    const response = await this.client.post('/ai/suggest-widgets', { dataset, description });
+    // Backend route: POST /api/v1/ai/suggest/dashboard
+    const response = await this.client.post('/ai/suggest/dashboard', { dataset, description });
     return response.data;
   }
 
   async suggestReportConfig(purpose: string, dataset?: string) {
-    const response = await this.client.post('/ai/suggest-report', { purpose, dataset });
+    // Backend route: POST /api/v1/ai/suggest/report
+    const response = await this.client.post('/ai/suggest/report', { purpose, dataset });
     return response.data;
   }
 
