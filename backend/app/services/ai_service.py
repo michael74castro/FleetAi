@@ -126,8 +126,124 @@ class AIService:
             }
 
         try:
-            # Generate response
-            # Lower temperature to reduce variability and improve consistency of answers.
+            # If data was requested, try to fetch data FIRST so we can include
+            # actual results in the AI prompt (prevents hallucinated numbers)
+            query_data = None
+            chart_config = None
+
+            if needs_data:
+                # Check for common aggregation patterns and handle directly
+                import re
+                aggregation_result = await self._handle_aggregation_query(user_message.lower())
+                if aggregation_result:
+                    result = {
+                        "message": aggregation_result["message"],
+                        "data": aggregation_result["data"],
+                        "metadata": {"model": self.model, "tokens": 0}
+                    }
+                    chart_config = self._detect_chart_config(result["data"], user_message)
+                    if chart_config:
+                        result["chart_config"] = chart_config
+                    result["suggestions"] = self._generate_suggestions(user_message, user_context)
+                    return result
+
+                # Check for fleet-wide maintenance insights
+                maintenance_insights_result = await self._handle_maintenance_insights_query(user_message.lower())
+                if maintenance_insights_result:
+                    result = {
+                        "message": maintenance_insights_result["message"],
+                        "data": maintenance_insights_result["data"],
+                        "metadata": {"model": self.model, "tokens": 0}
+                    }
+                    chart_config = self._detect_chart_config(result["data"], user_message)
+                    if chart_config:
+                        result["chart_config"] = chart_config
+                    result["suggestions"] = self._generate_suggestions(user_message, user_context)
+                    return result
+
+                # Check for service cost/invoice queries (maintenance, tyres, etc.)
+                service_result = await self._handle_service_cost_query(user_message.lower())
+                if service_result:
+                    result = {
+                        "message": service_result["message"],
+                        "data": service_result["data"],
+                        "metadata": {"model": self.model, "tokens": 0}
+                    }
+                    chart_config = self._detect_chart_config(result["data"], user_message)
+                    if chart_config:
+                        result["chart_config"] = chart_config
+                    result["suggestions"] = self._generate_suggestions(user_message, user_context)
+                    return result
+
+                # Check for book value queries
+                book_value_result = await self._handle_book_value_query(user_message.lower())
+                if book_value_result:
+                    result = {
+                        "message": book_value_result["message"],
+                        "data": book_value_result["data"],
+                        "metadata": {"model": self.model, "tokens": 0}
+                    }
+                    chart_config = self._detect_chart_config(result["data"], user_message)
+                    if chart_config:
+                        result["chart_config"] = chart_config
+                    result["suggestions"] = self._generate_suggestions(user_message, user_context)
+                    return result
+
+                # Check for contract expiry queries
+                expiry_result = await self._handle_contract_expiry_query(user_message.lower())
+                if expiry_result:
+                    result = {
+                        "message": expiry_result["message"],
+                        "data": expiry_result["data"],
+                        "metadata": {"model": self.model, "tokens": 0}
+                    }
+                    chart_config = self._detect_chart_config(result["data"], user_message)
+                    if chart_config:
+                        result["chart_config"] = chart_config
+                    result["suggestions"] = self._generate_suggestions(user_message, user_context)
+                    return result
+
+                # General SQL path: generate and execute SQL to get data first
+                conversation_context = "\n".join([
+                    f"{msg.role}: {msg.content}"
+                    for msg in conversation_history[-6:]
+                ])
+
+                sql_result = await self.generate_sql(
+                    user_message,
+                    user_context,
+                    execute=True,
+                    conversation_context=conversation_context
+                )
+                if sql_result.get("results"):
+                    query_data = sql_result["results"][:100]
+
+            # Now make a SINGLE AI call, including actual data if we have it
+            if query_data is not None:
+                data_preview = json.dumps(query_data[:20], default=str)
+                messages.append({
+                    "role": "system",
+                    "content": (
+                        f"IMPORTANT: A database query has already been executed for this question. "
+                        f"The query returned {len(query_data)} row(s). Here are the actual results:\n"
+                        f"{data_preview}\n\n"
+                        f"You MUST use ONLY these actual numbers in your response. "
+                        f"Do NOT invent, estimate, or guess any numbers. "
+                        f"Cite the exact values from the data above."
+                    )
+                })
+            elif needs_data:
+                # Data was needed but query failed — tell the AI not to fabricate
+                messages.append({
+                    "role": "system",
+                    "content": (
+                        "IMPORTANT: The database query for this question failed or returned no results. "
+                        "Do NOT fabricate or guess any numbers, names, or data. "
+                        "Instead, let the user know you were unable to retrieve the data and suggest "
+                        "they rephrase their question or try a simpler query."
+                    )
+                })
+
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
@@ -145,83 +261,11 @@ class AIService:
                 }
             }
 
-            # If data was requested, try to generate and execute SQL
-            if needs_data:
-                # Check for common aggregation patterns and handle directly
-                import re
-                aggregation_result = await self._handle_aggregation_query(user_message.lower())
-                if aggregation_result:
-                    result["data"] = aggregation_result["data"]
-                    result["message"] = aggregation_result["message"]
-                    chart_config = self._detect_chart_config(result["data"], user_message)
-                    if chart_config:
-                        result["chart_config"] = chart_config
-                    result["suggestions"] = self._generate_suggestions(user_message, user_context)
-                    return result
-
-                # Check for fleet-wide maintenance insights
-                maintenance_insights_result = await self._handle_maintenance_insights_query(user_message.lower())
-                if maintenance_insights_result:
-                    result["data"] = maintenance_insights_result["data"]
-                    result["message"] = maintenance_insights_result["message"]
-                    chart_config = self._detect_chart_config(result["data"], user_message)
-                    if chart_config:
-                        result["chart_config"] = chart_config
-                    result["suggestions"] = self._generate_suggestions(user_message, user_context)
-                    return result
-
-                # Check for service cost/invoice queries (maintenance, tyres, etc.)
-                service_result = await self._handle_service_cost_query(user_message.lower())
-                if service_result:
-                    result["data"] = service_result["data"]
-                    result["message"] = service_result["message"]
-                    chart_config = self._detect_chart_config(result["data"], user_message)
-                    if chart_config:
-                        result["chart_config"] = chart_config
-                    result["suggestions"] = self._generate_suggestions(user_message, user_context)
-                    return result
-
-                # Check for book value queries
-                book_value_result = await self._handle_book_value_query(user_message.lower())
-                if book_value_result:
-                    result["data"] = book_value_result["data"]
-                    result["message"] = book_value_result["message"]
-                    chart_config = self._detect_chart_config(result["data"], user_message)
-                    if chart_config:
-                        result["chart_config"] = chart_config
-                    result["suggestions"] = self._generate_suggestions(user_message, user_context)
-                    return result
-
-                # Check for contract expiry queries
-                expiry_result = await self._handle_contract_expiry_query(user_message.lower())
-                if expiry_result:
-                    result["data"] = expiry_result["data"]
-                    result["message"] = expiry_result["message"]
-                    chart_config = self._detect_chart_config(result["data"], user_message)
-                    if chart_config:
-                        result["chart_config"] = chart_config
-                    result["suggestions"] = self._generate_suggestions(user_message, user_context)
-                    return result
-
-                # Build conversation context for SQL generation
-                conversation_context = "\n".join([
-                    f"{msg.role}: {msg.content}"
-                    for msg in conversation_history[-6:]  # Last 6 messages for context
-                ])
-
-                sql_result = await self.generate_sql(
-                    user_message,
-                    user_context,
-                    execute=True,
-                    conversation_context=conversation_context
-                )
-                if sql_result.get("results"):
-                    result["data"] = sql_result["results"][:100]  # Limit rows
-                    result["message"] += f"\n\nI found {len(sql_result['results'])} results."
-                    # Auto-detect chart visualization
-                    chart_config = self._detect_chart_config(result["data"], user_message)
-                    if chart_config:
-                        result["chart_config"] = chart_config
+            if query_data is not None:
+                result["data"] = query_data
+                chart_config = self._detect_chart_config(query_data, user_message)
+                if chart_config:
+                    result["chart_config"] = chart_config
 
             # Generate suggestions
             result["suggestions"] = self._generate_suggestions(user_message, user_context)
@@ -298,6 +342,8 @@ class AIService:
         dim_mapping = {
             'status': 'vehicle_status',
             'make': 'make_name',
+            'manufacturer': 'make_name',
+            'brand': 'make_name',
             'model': 'model_name',
             'customer': 'customer_name',
             'type': 'body_type',
@@ -377,6 +423,8 @@ RULES:
 13. CRITICAL - For "by" or "per" or "breakdown" questions (e.g., "vehicles by status", "count by make", "breakdown by customer"), ALWAYS use GROUP BY and COUNT/SUM aggregations. Example: "vehicles by status" = SELECT vehicle_status, COUNT(*) as vehicle_count FROM dim_vehicle GROUP BY vehicle_status ORDER BY vehicle_count DESC
 14. CRITICAL - For visualization/chart queries, return aggregated data with clear dimension and measure columns. The result should have a categorical column (for x-axis) and numeric columns (for y-axis). Never return raw detail rows for chart queries.
 15. CRITICAL - Column names: Use EXACT column names from the schema. The column for vehicle make/manufacturer is "make_name" (NOT "manufacturer" or "make"). The column for vehicle model is "model_name" (NOT "model"). Example: "vehicles by make" = SELECT make_name, COUNT(*) as vehicle_count FROM dim_vehicle WHERE is_active = 1 GROUP BY make_name ORDER BY vehicle_count DESC
+16. CRITICAL - When using JOINs, ALWAYS qualify column names with table aliases to avoid ambiguous column errors. Example: SELECT c.customer_name, COUNT(*) as vehicle_count FROM dim_vehicle v JOIN dim_customer c ON v.customer_id = c.customer_id GROUP BY c.customer_name
+17. CRITICAL - For maintenance cost, budget, or invoice queries: ALWAYS use fact_exploitation_services with service_code=580 for maintenance. Use total_monthly_cost for actual cost and total_monthly_invoice for budgeted/invoiced amount. NEVER use fact_car_reports for maintenance cost analysis (its maintenance columns are per-km rates, NOT AED amounts).
 
 User's role: {user_context.get('role', 'unknown')}
 Customer access: {user_context.get('customer_ids', 'all')}
@@ -1053,10 +1101,27 @@ Monthly Costs/Invoices (fact_exploitation_services):
     service_code: 11=Depreciation, 100=Insurance, 580=Maintenance, 581=Tyres, 600=Fuel, 620=Replacement vehicle, 650=Licensing, 660=Roadside assistance, 700=Fee, 711=Finance admin fee, 999=Interest
   Join: fact_exploitation_services.vehicle_id = dim_vehicle.vehicle_id
   Service code descriptions: JOIN ref_domain_translation dt ON CAST(dt.domain_value AS INTEGER) = es.service_code AND dt.domain_id = 5 AND dt.language_code = 'E'
+  CRITICAL - Budget vs Cost terminology:
+    "Budgeted amount" / "budget" / "invoiced amount" = total_monthly_invoice (the invoiced amount billed to the customer)
+    "Actual cost" / "real cost" / "maintenance cost" = total_monthly_cost (the actual cost incurred)
+    When a user asks about vehicles "exceeding budget" or "over budget" or "cost over invoiced amount", compare total_monthly_cost > total_monthly_invoice
+    Example: "top 10 vehicles exceeding maintenance cost over invoiced amount":
+      SELECT v.vehicle_id, v.registration_number, v.make_and_model,
+             SUM(es.total_monthly_cost) AS total_maintenance_cost,
+             SUM(es.total_monthly_invoice) AS total_invoiced_amount,
+             ROUND(SUM(es.total_monthly_cost) - SUM(es.total_monthly_invoice), 2) AS over_budget
+      FROM fact_exploitation_services es
+      JOIN dim_vehicle v ON es.vehicle_id = v.vehicle_id
+      WHERE es.service_code = 580 AND v.is_active = 1
+      GROUP BY v.vehicle_id, v.registration_number, v.make_and_model
+      HAVING total_maintenance_cost > total_invoiced_amount
+      ORDER BY over_budget DESC LIMIT 10
 
 Vehicle Cost Reports (fact_car_reports):
   Monthly snapshot per vehicle. Only total_cost and total_invoiced are in AED.
   Cost breakdown columns (maintenance_cost_total etc.) are PER-KM RATES, not AED amounts.
+  CRITICAL: NEVER use fact_car_reports for maintenance cost queries — the maintenance columns are per-km rates, NOT AED amounts.
+  ALWAYS use fact_exploitation_services (service_code=580) for maintenance cost analysis.
   For per-month breakdowns, use fact_exploitation_services instead."""
 
     def _build_system_prompt(self, user_context: Dict[str, Any]) -> str:
@@ -1197,18 +1262,21 @@ Guidelines:
 
         # Common patterns: "vehicles by X", "show vehicles by X", "show me vehicles by X", etc.
         # More flexible patterns to catch various phrasings
+        dim_choices = r'status|make|manufacturer|brand|customer|type|model|fuel'
         patterns = [
-            (r'(?:show|get|list|display|give)?\s*(?:me\s+)?(?:the\s+)?(?:all\s+)?vehicles?\s+(?:breakdown\s+)?by\s+(status|make|customer|type|model|fuel)', 'dim_vehicle', 'vehicles'),
-            (r'(?:show|get|list|display|give)?\s*(?:me\s+)?(?:the\s+)?(?:number|count)?\s*(?:of\s+)?vehicles?\s+by\s+(status|make|customer|type|model|fuel)', 'dim_vehicle', 'vehicles'),
-            (r'(?:breakdown|distribution)\s+(?:of\s+)?vehicles?\s+by\s+(status|make|customer|type|model|fuel)', 'dim_vehicle', 'vehicles'),
-            (r'how\s+many\s+vehicles?\s+(?:per|by|for\s+each)\s+(status|make|customer|type|model|fuel)', 'dim_vehicle', 'vehicles'),
-            (r'vehicles?\s+(?:per|by)\s+(status|make|customer|type|model|fuel)', 'dim_vehicle', 'vehicles'),
+            (rf'(?:show|get|list|display|give)?\s*(?:me\s+)?(?:the\s+)?(?:all\s+)?(?:total\s+)?(?:number\s+)?(?:of\s+)?vehicles?\s+(?:breakdown\s+)?by\s+({dim_choices})', 'dim_vehicle', 'vehicles'),
+            (rf'(?:show|get|list|display|give)?\s*(?:me\s+)?(?:the\s+)?(?:number|count)?\s*(?:of\s+)?vehicles?\s+by\s+({dim_choices})', 'dim_vehicle', 'vehicles'),
+            (rf'(?:breakdown|distribution)\s+(?:of\s+)?vehicles?\s+by\s+({dim_choices})', 'dim_vehicle', 'vehicles'),
+            (rf'how\s+many\s+vehicles?\s+(?:per|by|for\s+each)\s+({dim_choices})', 'dim_vehicle', 'vehicles'),
+            (rf'vehicles?\s+(?:per|by)\s+({dim_choices})', 'dim_vehicle', 'vehicles'),
             (r'(?:show|get|list|display|give)?\s*(?:me\s+)?(?:the\s+)?contracts?\s+by\s+(status|customer)', 'dim_contract', 'contracts'),
         ]
 
         dim_mapping = {
             'status': 'vehicle_status',
             'make': 'make_name',
+            'manufacturer': 'make_name',
+            'brand': 'make_name',
             'model': 'model_name',
             'customer': 'customer_name',
             'type': 'body_type',
@@ -1576,10 +1644,13 @@ ORDER BY es.reporting_period"""
         from dateutil.relativedelta import relativedelta
 
         # Detect expiry/renewal queries
-        expiry_keywords = ['expir', 'renew', 'ending', 'contract end', 'lease end',
-                          'due for renewal', 'coming up for renewal', 'contracts ending']
+        # Use word-boundary regex to avoid false matches (e.g. "exceeding" matching "ending")
+        expiry_patterns = [
+            r'expir', r'renew', r'\bending\b', r'contract\s+end', r'lease\s+end',
+            r'due\s+for\s+renewal', r'coming\s+up\s+for\s+renewal', r'contracts?\s+ending'
+        ]
 
-        has_expiry = any(kw in query_lower for kw in expiry_keywords)
+        has_expiry = any(re.search(p, query_lower) for p in expiry_patterns)
         if not has_expiry:
             return None
 
