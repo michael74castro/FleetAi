@@ -215,6 +215,158 @@ async def get_vehicles_list(
         raise
 
 
+@router.get("/vehicles/{vehicle_id}")
+async def get_vehicle_details(vehicle_id: int):
+    """Get comprehensive details for a single vehicle."""
+    try:
+        # Main vehicle + driver + contract + customer query
+        query = """
+            SELECT
+                v.vehicle_id,
+                v.vehicle_id AS object_no,
+                v.registration_number,
+                v.vin_number,
+                v.make_name,
+                v.model_name,
+                v.make_and_model,
+                v.vehicle_year,
+                v.color_name,
+                v.body_type,
+                v.fuel_type,
+                v.vehicle_status,
+                v.vehicle_status_code,
+                v.is_active,
+                v.lease_type,
+                v.lease_type_description,
+                v.purchase_price,
+                v.residual_value,
+                v.monthly_lease_amount,
+                v.lease_duration_months,
+                v.annual_km_allowance,
+                v.current_odometer_km,
+                v.last_odometer_date,
+                v.lease_start_date,
+                v.lease_end_date,
+                v.expected_end_date,
+                v.months_driven,
+                v.months_remaining,
+                v.days_to_contract_end,
+                v.customer_id,
+                v.customer_name,
+                v.contract_position_number,
+                d.driver_name,
+                d.first_name AS driver_first_name,
+                d.last_name AS driver_last_name,
+                d.email_address AS driver_email,
+                d.phone_mobile AS driver_mobile,
+                ct.contract_number,
+                ct.monthly_rate_total,
+                ct.monthly_rate_depreciation,
+                ct.monthly_rate_maintenance,
+                ct.monthly_rate_insurance,
+                ct.monthly_rate_fuel,
+                ct.monthly_rate_tires,
+                ct.monthly_rate_road_tax,
+                ct.monthly_rate_admin,
+                ct.monthly_rate_replacement_vehicle,
+                ct.excess_km_rate,
+                ct.interest_rate_percent,
+                cust.customer_name AS company_name,
+                cust.account_manager_name
+            FROM dim_vehicle v
+            LEFT JOIN dim_driver d
+                ON v.vehicle_id = d.vehicle_id AND d.is_primary_driver = 1
+            LEFT JOIN dim_contract ct
+                ON v.contract_position_number = ct.contract_position_number
+            LEFT JOIN dim_customer cust
+                ON v.customer_id = cust.customer_id
+            WHERE v.vehicle_id = :vehicle_id
+        """
+        rows = await execute_raw_query(query, {"vehicle_id": vehicle_id})
+
+        if not rows:
+            return {"error": "Vehicle not found", "vehicle_id": vehicle_id}
+
+        vehicle = dict(rows[0])
+
+        # Get cost centre from staging_drivers
+        cost_centre_query = """
+            SELECT cost_center
+            FROM staging_drivers
+            WHERE object_no = :vehicle_id AND is_current = 1
+            ORDER BY driver_no ASC
+            LIMIT 1
+        """
+        cc_rows = await execute_raw_query(cost_centre_query, {"vehicle_id": vehicle_id})
+        vehicle["cost_centre"] = cc_rows[0]["cost_center"] if cc_rows else None
+
+        # Get start mileage from first odometer reading
+        start_km_query = """
+            SELECT reading_km
+            FROM fact_odometer_reading
+            WHERE vehicle_id = :vehicle_id
+            ORDER BY reading_date ASC
+            LIMIT 1
+        """
+        try:
+            start_km_rows = await execute_raw_query(start_km_query, {"vehicle_id": vehicle_id})
+            vehicle["start_mileage"] = start_km_rows[0]["reading_km"] if start_km_rows else None
+        except Exception:
+            vehicle["start_mileage"] = None
+
+        # Get renewal order info
+        renewal_query = """
+            SELECT order_no, order_status
+            FROM staging_orders
+            WHERE previous_object_no = :vehicle_id
+              AND order_status_code < 6
+            ORDER BY order_no DESC
+            LIMIT 1
+        """
+        renewal_rows = await execute_raw_query(renewal_query, {"vehicle_id": vehicle_id})
+        if renewal_rows:
+            vehicle["renewal_order_no"] = renewal_rows[0]["order_no"]
+            vehicle["renewal_status"] = renewal_rows[0]["order_status"]
+        else:
+            vehicle["renewal_order_no"] = None
+            vehicle["renewal_status"] = None
+
+        # Compute gauge data
+        duration_months = vehicle.get("lease_duration_months") or 0
+        months_driven = vehicle.get("months_driven") or 0
+        if duration_months > 0:
+            duration_pct = round((months_driven / duration_months) * 100, 1)
+        else:
+            duration_pct = 0
+
+        annual_km = vehicle.get("annual_km_allowance") or 0
+        total_km_allowance = annual_km * (duration_months / 12) if duration_months > 0 else 0
+        current_km = vehicle.get("current_odometer_km") or 0
+        start_km = vehicle.get("start_mileage") or 0
+        driven_km = current_km - start_km if current_km > start_km else current_km
+        if total_km_allowance > 0:
+            km_pct = round((driven_km / total_km_allowance) * 100, 1)
+        else:
+            km_pct = 0
+
+        vehicle["gauge_duration"] = {
+            "value": months_driven,
+            "target": duration_months,
+            "percentage": min(duration_pct, 150),
+        }
+        vehicle["gauge_km"] = {
+            "value": driven_km,
+            "target": int(total_km_allowance),
+            "percentage": min(km_pct, 150),
+        }
+
+        return vehicle
+
+    except Exception as e:
+        logger.error(f"Error fetching vehicle details: {e}")
+        raise
+
+
 @router.get("/renewals/filters")
 async def get_renewals_filter_options():
     """Get available filter options for the renewals page (makes, customers, etc.)."""

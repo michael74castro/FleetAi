@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   ChevronDown,
   ChevronRight,
@@ -58,6 +58,8 @@ type FilterType = 'overdue_with_order' | 'overdue_no_order' | 'due_no_order' | '
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
 export default function RenewalsOrdersPage() {
+  const navigate = useNavigate();
+
   // State
   const [kpis, setKpis] = useState<RenewalsKPIs | null>(null);
   const [items, setItems] = useState<RenewalItem[]>([]);
@@ -833,6 +835,7 @@ export default function RenewalsOrdersPage() {
                 items.map((item, index) => (
                   <tr
                     key={item.vehicle_id || item.order_no || index}
+                    onClick={() => item.vehicle_id && navigate(`/operation/vehicle/${item.vehicle_id}`)}
                     className="border-b border-white/5 hover:bg-white/5 cursor-pointer transition-colors"
                   >
                     {visibleColumns.includes('registration_number') && (

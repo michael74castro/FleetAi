@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 import { useAuthStore } from '@/store/authStore';
@@ -11,6 +11,7 @@ import Layout from '@/components/layout/Layout';
 import LoginPage from '@/pages/LoginPage';
 import HomePage from '@/pages/HomePage';
 import OperationPage from '@/pages/OperationPage';
+const VehicleDetailPage = lazy(() => import('@/pages/VehicleDetailPage'));
 import RenewalsOrdersPage from '@/pages/RenewalsOrdersPage';
 import ServiceMOTPage from '@/pages/ServiceMOTPage';
 import AnalysisPage from '@/pages/AnalysisPage';
@@ -99,7 +100,7 @@ function App() {
           <Route path="operation" element={<OperationPage />} />
           <Route path="operation/renewals" element={<RenewalsOrdersPage />} />
           <Route path="operation/service" element={<ServiceMOTPage />} />
-          <Route path="operation/vehicle/:vehicleId" element={<OperationPage />} />
+          <Route path="operation/vehicle/:vehicleId" element={<Suspense fallback={<div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-orange"></div></div>}><VehicleDetailPage /></Suspense>} />
 
           {/* Analysis */}
           <Route path="analysis" element={<AnalysisPage />} />
