@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Send, Plus, Trash2, MessageSquare, Sparkles, Code, Lightbulb, Bot, User } from 'lucide-react';
+import { Send, Plus, Trash2, MessageSquare, Code, Lightbulb, User, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 import { useAIStore } from '@/store/aiStore';
 import AIResponseChart from '@/components/ai/AIResponseChart';
 import { detectChartConfig } from '@/utils/chartDetection';
+import { useVoice } from '@/hooks/useVoice';
+import { isInsightMessage, extractInsightText } from '@/utils/insightDetection';
 
 export default function AIAssistantPage() {
   const { conversationId } = useParams();
@@ -24,6 +26,19 @@ export default function AIAssistantPage() {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const prevMessageCountRef = useRef(0);
+
+  const {
+    isListening,
+    isSTTSupported,
+    transcript,
+    startListening,
+    stopListening,
+    isSpeaking,
+    isTTSSupported,
+    speak,
+    stopSpeaking,
+  } = useVoice();
 
   useEffect(() => {
     loadConversations();
@@ -48,6 +63,35 @@ export default function AIAssistantPage() {
     }, delay);
     return () => clearTimeout(timer);
   }, [currentConversation?.messages]);
+
+  // Pipe speech transcript into the input field
+  useEffect(() => {
+    if (transcript) {
+      setInput(transcript);
+    }
+  }, [transcript]);
+
+  // Auto-play TTS for insight messages
+  useEffect(() => {
+    const messages = currentConversation?.messages ?? [];
+    const count = messages.length;
+
+    if (count > prevMessageCountRef.current && count > 0) {
+      const lastMessage = messages[count - 1];
+      if (
+        lastMessage.role === 'assistant' &&
+        typeof lastMessage.content === 'string' &&
+        isInsightMessage(lastMessage.content, lastMessage.metadata)
+      ) {
+        const timer = setTimeout(() => {
+          speak(extractInsightText(lastMessage.content as string));
+        }, 500);
+        return () => clearTimeout(timer);
+      }
+    }
+
+    prevMessageCountRef.current = count;
+  }, [currentConversation?.messages, speak]);
 
   const handleSend = async () => {
     if (!input.trim() || isSending) return;
@@ -258,6 +302,30 @@ export default function AIAssistantPage() {
                               })()
                             : JSON.stringify(message.content)}
                         </div>
+                        {isTTSSupported && message.role === 'assistant' && typeof message.content === 'string' && isInsightMessage(message.content, message.metadata) && (
+                          <div className="mt-2 flex justify-end">
+                            <button
+                              onClick={() =>
+                                isSpeaking
+                                  ? stopSpeaking()
+                                  : speak(extractInsightText(message.content as string))
+                              }
+                              className="flex items-center space-x-1 text-xs text-white/40 hover:text-[#a9c90e] transition-colors"
+                            >
+                              {isSpeaking ? (
+                                <>
+                                  <VolumeX className="h-3.5 w-3.5" />
+                                  <span>Stop</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Volume2 className="h-3.5 w-3.5" />
+                                  <span>Read aloud</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        )}
                         {message.metadata && typeof message.metadata === 'object' && message.metadata.sql && (
                           <pre className="mt-3 p-3 bg-black/30 rounded-xl text-xs overflow-x-auto border border-white/10">
                             <code className="text-brand-cyan">{message.metadata.sql}</code>
@@ -364,12 +432,31 @@ export default function AIAssistantPage() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask me anything about your fleet data..."
+                placeholder={isListening ? 'Listening...' : 'Ask me anything about your fleet data...'}
                 rows={1}
-                className="w-full glass-input px-5 py-4 pr-14 text-sm text-white resize-none"
+                className={`w-full glass-input px-5 py-4 pr-14 text-sm text-white resize-none transition-all ${
+                  isListening ? 'ring-1 ring-brand-cyan/60' : ''
+                }`}
                 style={{ minHeight: '56px', maxHeight: '160px' }}
               />
             </div>
+            {isSTTSupported && (
+              <button
+                onClick={isListening ? stopListening : startListening}
+                className={`flex items-center justify-center p-4 rounded-xl transition-all ${
+                  isListening
+                    ? 'bg-red-500/20 text-red-400 animate-pulse-glow'
+                    : 'glass-button text-white/60 hover:text-white'
+                }`}
+                title={isListening ? 'Stop listening' : 'Voice input'}
+              >
+                {isListening ? (
+                  <MicOff className="h-5 w-5" />
+                ) : (
+                  <Mic className="h-5 w-5" />
+                )}
+              </button>
+            )}
             <button
               onClick={handleSend}
               disabled={!input.trim() || isSending}
